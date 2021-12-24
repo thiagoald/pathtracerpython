@@ -43,13 +43,13 @@ def main(filename=None):
         print("    material id:" + str(mesh.materialindex+1))
         print("    vertices:" + str(len(mesh.vertices)))
         print("    first 3 verts:\n" + str(mesh.vertices[:3]))
-        if mesh.normals.any():
+        if len(mesh.normals):
                 print("    first 3 normals:\n" + str(mesh.normals[:3]))
         else:
                 print("    no normals")
         print("    colors:" + str(len(mesh.colors)))
         tcs = mesh.texturecoords
-        if tcs.any():
+        if len(tcs):
             for tc_index, tc in enumerate(tcs):
                 print("    texture-coords "+ str(tc_index) + ":" + str(len(tcs[tc_index])) + "first3:" + str(tcs[tc_index][:3]))
 
