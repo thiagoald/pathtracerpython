@@ -1,5 +1,6 @@
 autopep8==1.6.0
 backcall==0.2.0
+colorama==0.4.4
 decorator==5.1.0
 ipdb==0.13.9
 ipython==7.30.1
