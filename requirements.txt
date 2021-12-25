@@ -10,6 +10,7 @@ numpy==1.21.5
 parso==0.8.3
 pexpect==4.8.0
 pickleshare==0.7.5
+Pillow==8.4.0
 prompt-toolkit==3.0.24
 ptyprocess==0.7.0
 pyassimp==4.1.4
@@ -22,5 +23,6 @@ PyQt5-Qt5==5.15.2
 PyQt5-sip==12.9.0
 pyqtgraph==0.12.3
 toml==0.10.2
+tqdm==4.62.3
 traitlets==5.1.1
 wcwidth==0.2.5
