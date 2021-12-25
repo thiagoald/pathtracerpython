@@ -9,8 +9,15 @@ from PIL import Image
 
 colorama.init(autoreset=True)
 
+
+class NoIntersection(Exception):
+    pass
+
 ZERO = 1E-1
 
+
+def squared_dist(pt1, pt2):
+    return sum([(c2 - c1)*(c2 - c1) for c2, c1 in zip(pt1, pt2)])
 
 def lerp(pt1, pt2, t):
     return (1-t)*np.array(pt1) + t*np.array(pt2)
@@ -108,7 +115,7 @@ def intersect(ray, triangle):
         print ('INTERSECTION P')
         print (P)
         '''
-        return None
+        raise NoIntersection
 
 
 def make_image(x1, y1, x2, y2, width, height, intersections):
