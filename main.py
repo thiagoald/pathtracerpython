@@ -2,13 +2,9 @@
 
 # Example: ./main.py objs/cornellroom.sdl
 
-from sys import argv
 from scene_reader import Scene
-import ipdb
 from plot import plot_scene
 from utils import make_rays, make_screen_pts, intersect, make_image
-import numpy as np
-from PIL import Image
 from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
 import argparse
@@ -32,6 +28,7 @@ def setup():
     parser.add_argument('--show-scene', default=False, action='store_true')
     args = parser.parse_args()
     return args
+
 
 def main():
     args = setup()
