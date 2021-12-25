@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-# Example: ./main.py objs/cornellroom.sdl
+# Example:
+#  $ ./main.py objs/cornellroom.sdl --show-scene --show-img --out out.png
 
 from scene_reader import Scene
 from plot import plot_scene
