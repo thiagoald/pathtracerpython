@@ -10,7 +10,7 @@ from utils import make_rays, make_screen_pts, intersect
 
 def main():
     scene = Scene(argv[1])
-    screen_pts = make_screen_pts(*scene.ortho, scene.width, scene.height)[:20]
+    screen_pts = make_screen_pts(*scene.ortho, scene.width, scene.height)[:100]
     rays = make_rays(scene.eye, screen_pts)
     intersections = []
     for obj in scene.objects:
