@@ -45,13 +45,9 @@ def main():
     n_cpus = cpu_count()
     results = []
     with Pool(n_cpus) as pool:
-        n_objs = len(scene.objects)
-        for i_obj, obj in enumerate(scene.objects):
+        for obj in scene.objects:
             obj_color = [obj[c] for c in ['red', 'green', 'blue']]
-            n_tris = len(obj['geometry'].triangles)
-            for i_tri, triangle in enumerate(obj['geometry'].triangles):
-                print((f'objs: {100*(i_obj+1)/n_objs:.2f}% '
-                      f'triangles: {100*(i_tri+1)/n_tris:.2f}%'))
+            for triangle in obj['geometry'].triangles:
                 for i_cpu in range(n_cpus):
                     results.append(
                         pool.apply_async(
