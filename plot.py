@@ -25,15 +25,20 @@ def show():
     pg.mkQApp().exec_()
 
 
-def plot_scene(scene, rays, intersections,
+def plot_scene(scene, rays, data,
                show_normals=False, show_screen=False, show_inter=False):
     w = init()
-    plot_objects(w, scene.objects, normals=show_normals)
+    if not show_inter:
+        plot_objects(w, scene.objects, normals=show_normals)
     plot_camera(w, scene.eye)
-    # plot_screen(w, *scene.ortho, scene.width, scene.height)
     # plot_rays(w, rays, 40)
-    plot_intersections(w, intersections, screen_pts=show_screen,
-                       scene_pts=show_inter)
+    if show_inter:
+        intersection_data = [y for x, y in data]
+        plot_intersections(w,intersection_data)
+    if show_screen:
+        screen_data = [x for x, y in data]
+        list_of_2d_colors = screen_data
+        plot_screen(w,*scene.ortho, scene.width, scene.height, list_of_2d_colors)
     show()
 
 
@@ -78,10 +83,11 @@ def plot_camera(widget, eye, color=WHITE_OPAQUE):
     widget.addItem(pt)
 
 
-def plot_screen(widget, x0, y0, x1, y1, n_pxls_x, n_pxls_y, color=WHITE_OPAQUE):
+def plot_screen(widget, x0, y0, x1, y1, n_pxls_x, n_pxls_y, list_of_2d_colors):
     pts = make_screen_pts(x0, y0, x1, y1, n_pxls_x, n_pxls_y)
+    print (np.array(list_of_2d_colors))
     widget.addItem(gl.GLScatterPlotItem(pos=np.array(
-        pts), size=1, color=color, glOptions='translucent'))
+        pts), size=3, color=np.array(list_of_2d_colors), glOptions='translucent'))
 
 
 def plot_rays(widget, rays, t, color=WHITE_TRANSLUCENT):
@@ -90,17 +96,20 @@ def plot_rays(widget, rays, t, color=WHITE_TRANSLUCENT):
             pos=np.array([pt, pt + t*vector]), color=color, glOptions='translucent'))
 
 
-def plot_intersections(widget, intersections, screen_pts=True, scene_pts=True):
-    colors = [c for _, _, c in intersections]
-    if scene_pts:
-        pts_3d = [p for p, _, _ in intersections]
-        widget.addItem(gl.GLScatterPlotItem(pos=np.array(pts_3d),
-                                            size=3,
-                                            color=np.array(colors),
-                                            glOptions='translucent'))
+def plot_intersections(widget, intersection_lists):
+    
+    colors = [[color for point, color in intersection_list] for intersection_list in intersection_lists]
+    pts_3d = [[point for point, color in intersection_list] for intersection_list in intersection_lists]
+    #print (np.array(colors))
+    widget.addItem(gl.GLScatterPlotItem(pos=np.array(pts_3d),
+                                        size=3,
+                                        color=np.array(colors),
+                                        glOptions='translucent'))
+    '''
     if screen_pts:
-        pts_2d = [p for _, p, _ in intersections]
+        pts_2d = [p for _, p in intersections]
         widget.addItem(gl.GLScatterPlotItem(pos=np.array(pts_2d),
                                             size=3,
                                             color=np.array(colors),
                                             glOptions='translucent'))
+    '''
