@@ -112,7 +112,7 @@ class Scene():
         self.ortho = None
         self.background = None
         self.ambient = None
-        self.light_geom = None
+        self.light_obj = None
         self.light_color = None
         self.npaths = None
         self.tonemapping = None
@@ -128,7 +128,7 @@ class Scene():
                 f'\n\t ortho = {self.ortho}'
                 f'\n\t background = {self.background}'
                 f'\n\t ambient = {self.ambient}'
-                f'\n\t light_geom = {self.light_geom}'
+                f'\n\t light_obj = {self.light_obj}'
                 f'\n\t light_color = {self.light_color}'
                 f'\n\t npaths = {self.npaths}'
                 f'\n\t tonemapping = {self.tonemapping}'
@@ -160,7 +160,7 @@ class Scene():
                 elif tokens[0] == 'ambient':
                     self.ambient = float(tokens[1])
                 elif tokens[0] == 'light':
-                    self.light_geom = Obj(join(dirname(path), tokens[1]))
+                    self.light_obj = Obj(join(dirname(path), tokens[1]))
                     self.light_color = [float(tkn) for tkn in tokens[2:6]]
                 elif tokens[0] == 'npaths':
                     self.npaths = int(tokens[1])

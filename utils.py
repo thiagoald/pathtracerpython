@@ -6,6 +6,7 @@ import ipdb
 import colorama
 from colorama import Fore, Back, Style
 from PIL import Image
+from random import uniform
 
 colorama.init(autoreset=True)
 
@@ -13,8 +14,36 @@ colorama.init(autoreset=True)
 class NoIntersection(Exception):
     pass
 
-ZERO = 1E-1
 
+ZERO = 1E-5
+
+
+def sample_bary_coords():
+    '''Return barycentric coordinates'''
+    coords = [uniform(0, 1) for _ in range(3)]
+    sum_ = sum(coords)
+    return [c/sum_ for c in coords]
+
+
+def pick_random_triangle(areas):
+    '''Return index of triangle picked'''
+    n = uniform(0, sum(areas))
+    numbers = [0]
+    acc = 0
+    for a in areas:
+        acc += a
+        numbers.append(acc)
+    for i, interval in enumerate(zip(numbers, numbers[1:])):
+        n1, n2 = interval
+        if (n1 <= n < n2):
+            return i
+
+
+def sample_random_pt(triangle):
+    '''Return a point sampled in the triangle'''
+    v1, v2, v3 = triangle
+    a, b, c = sample_bary_coords()
+    return a*np.array(v1) + b*np.array(v2) + c*np.array(v3)
 
 def squared_dist(pt1, pt2):
     return sum([(c2 - c1)*(c2 - c1) for c2, c1 in zip(pt1, pt2)])
@@ -85,7 +114,7 @@ def intersect(ray, triangle):
     v_plane = v_plane/np.linalg.norm(v_plane)  # normalize vector of plane
     # check if they're not collinear (line parallel to plane)
     dot = np.dot(vr, v_plane)
-    if (abs(dot) > 1e-5):
+    if (abs(dot) > ZERO):
         t = (np.dot(v_plane, np.array(v1)) - np.dot(v_plane, np.array(pr))
              )/np.dot(v_plane, vr)  # calculate intersection parameter
         P = np.array(pr) + vr*t  # calculate intersection point
