@@ -75,6 +75,10 @@ def setup():
     parser = argparse.ArgumentParser()
     parser.add_argument('scene', help='SDL scene')
     parser.add_argument('--out', help='Output image')
+    parser.add_argument('-r', dest='n_rays', type=int,
+                        help='Number of rays per pixel')
+    parser.add_argument('-b', dest='n_bounces', type=int,
+                        help='Number of bounces')
     parser.add_argument('--show-img', default=False, action='store_true')
     parser.add_argument('--show-scene', default=False, action='store_true')
     parser.add_argument('--show-normals', default=False, action='store_true')
@@ -96,9 +100,8 @@ def main():
     print(f'Number of rays: {len(rays)}')
     intersections = []
     results = []
-    how_many_rays=4
-    how_many_bounces=4
-    colored_intersections=[]
+    how_many_rays = args.n_rays
+    how_many_bounces = args.n_bounces
     accumulated_kln = np.ones(scene.width*scene.height)
     ray_type = ['dif']*(scene.width*scene.height)
     #initialization
