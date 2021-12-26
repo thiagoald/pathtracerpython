@@ -14,11 +14,8 @@ import argparse
 from random import uniform
 import math
 
-tau = 6.28
+TAU = 6.28
 
-def compute_shadow_rays(scene, obj, point):
-    #compute light color
-    light_color = scene.light_color
     
     #compute normal vector (normalized)
     normal_vector = np.array(obj['geometry'].normals[0])
@@ -137,11 +134,7 @@ def main():
                     ray_type_randomness=0 #toss a random "coin" here. For now, it will always be zero
                     if ray_type_randomness <= obj['kd']: #Case 1: diffuse
                         phi = np.arccos(math.sqrt(uniform(0, 1)))
-                        theta = tau*uniform(0,1)
-                        ray_vector=np.array((np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(phi)))
-                        ray_vector=ray_vector/np.linalg.norm(ray_vector)
-                        rays.append((point,ray_vector,))
-                        accumulated_kln[counter]*=obj['kd']*np.dot(ray_vector, normal)
+                        theta = TAU*uniform(0, 1)
                 else:
                     rays.append(None)
                 counter+=1
