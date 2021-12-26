@@ -3,10 +3,11 @@
 # Example:
 #  $ ./main.py objs/cornellroom.sdl --show-scene --show-img --out out.png
 
-from ipdb.__main__ import set_trace
 from scene_reader import Scene
 from plot import plot_scene
-from utils import NoIntersection, make_rays, make_screen_pts, intersect, make_image, squared_dist
+from utils import (NoIntersection, make_rays, make_screen_pts, intersect,
+                   make_image, sample_random_pt, squared_dist,
+                   pick_random_triangle)
 from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
 import numpy as np
