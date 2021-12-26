@@ -129,7 +129,7 @@ def main():
     how_many_rays = args.n_rays
     how_many_bounces = args.n_bounces
     colored_intersections = []
-    accumulated_kln = np.ones(scene.width*scene.height)
+    accumulated_k = np.ones(scene.width*scene.height)
     ray_type = ['dif']*(scene.width*scene.height)
     # initialization
     for _ in range(scene.width*scene.height):
@@ -142,6 +142,7 @@ def main():
     # iterative (non-recursive) path tracing
     for rays_counter in range(how_many_rays):
         print('rays_counter is ' + str(rays_counter))
+        accumulated_k = np.ones(scene.width*scene.height)
         for bounces_counter in range(how_many_bounces):
             print('bounces_counter is ' + str(bounces_counter))
             # compute intersections
@@ -157,32 +158,40 @@ def main():
                     point, normal, obj = result
                     old_color, _ = colored_intersections[counter]
                     new_color = compute_ambient_color(
-                        scene, obj) + compute_shadow_rays(scene, obj, point, normal)  # add shadow rays term
+                        scene, obj) + compute_shadow_rays(scene, obj, point, normal)  
                     colored_intersections[counter] = (
-                        old_color+new_color*accumulated_kln[counter], [(point, new_color,)],)
+                        old_color+new_color*accumulated_k[counter], [(point, new_color,)],)
                 counter += 1
 
             # now we create new rays
+            old_rays=rays
             rays = []
             counter = 0
             for result in results:
                 if result is not None:
                     point, normal, obj = result
-                    ray_type_randomness = 0  # toss a random "coin" here. For now, it will always be zero
+                    ray_type_randomness = uniform(0, obj['kd']+obj['ks'])  # toss a random "coin" here. For now, it will always be zero
                     if ray_type_randomness <= obj['kd']:  # Case 1: diffuse
                         phi = np.arccos(math.sqrt(uniform(0, 1)))
                         theta = TAU*uniform(0, 1)
                         ray_vector = np.array((np.sin(theta)*np.cos(phi),
                                                np.sin(theta)*np.sin(phi),
-                                               np.cos(phi)))
+                                               np.cos(theta)))
                         ray_vector = ray_vector/np.linalg.norm(ray_vector)
                         rays.append((point, ray_vector))
-                        accumulated_kln[counter] *= obj['kd'] * \
+                        accumulated_k[counter] *= obj['kd'] * \
                             np.dot(ray_vector, normal)
+                    else:
+                        ray_vector = 2*normal*np.dot(normal, old_ray[counter]) - old_rays[counter]
+                        ray_vector = ray_vector/np.linalg.norm(ray_vector)
+                        eye_vector = scene.eye - point
+                        eye_vector = eye_vector/np.linalg.norm(eye_vector)
+                        rays.append((point, ray_vector))
+                        accumulated_k *= obj['ks'] * ((np.dot(eye_vector, ray_vector))**obj['n'])
                 else:
                     rays.append(None)
                 counter += 1
-
+        
     # Here we average the rays
     temp_intersections = []
     for intersec in colored_intersections:
