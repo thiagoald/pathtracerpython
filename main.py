@@ -16,6 +16,32 @@ import math
 
 tau = 6.28
 
+def compute_shadow_rays(scene, obj, point):
+    #compute light color
+    light_color = scene.light_color
+    
+    #compute normal vector (normalized)
+    normal_vector = np.array(obj['geometry'].normals[0])
+    normal_vector = normal_vector/np.linalg.norm(normal_vector)
+    
+    
+    #compute random shadow rays
+    shadow_vector_list=[]
+    shadow_vector_quantity=10
+    '''TO-DO'''
+    
+    
+    
+    #compute colors
+    dot=0
+    for shadow_vector in shadow_vector_list:
+        if shadow_vector is not None:
+            dot+=np.dot(shadow_vector, normal_vector)
+    dot /= len(shadow_vector)
+    color_list = [obj[c]*dot  for c in ['red', 'green', 'blue']]
+    color_array = np.array (color_list)
+    return color_array
+    
 def compute_ambient_color(scene, obj):
     color_list = [obj[c]*obj['ka']*scene.ambient for c in ['red', 'green', 'blue']]
     color_array = np.array(color_list)
@@ -27,13 +53,13 @@ def intersect_objects(ray, objects):
     #returns nearest intersecting object
     intersections = []
     for i, obj in enumerate(objects):
-        for triangle in obj['geometry'].triangles:
+        for triangle, normal in zip(obj['geometry'].triangles, obj['geometry'].normals):
             try:
                 pt_3d = intersect(ray, triangle)
                 if pt_3d is not None:
                     pt_screen = ray[0] + ray[1]
                     intersections.append(
-                        [squared_dist(pt_3d, ray[0]), pt_3d, pt_screen, i])
+                        [squared_dist(pt_3d, ray[0]), pt_3d, pt_screen, normal, i])
             except NoIntersection:
                 pass
 
@@ -44,9 +70,7 @@ def intersect_objects(ray, objects):
         closest_inter = min(intersections, key=lambda inter: inter[0])
         i_obj = closest_inter[-1]
         obj = objects[i_obj]
-        #color = [obj[c] for c in ['red', 'green', 'blue']]
-        #return closest_inter[1:-1] + [color]
-        return (closest_inter[1], obj)
+        return (closest_inter[1], closest_inter[3], obj)
 
 
 def setup():
@@ -74,15 +98,15 @@ def main():
     print(f'Number of rays: {len(rays)}')
     intersections = []
     results = []
-    how_many_rays=1
-    how_many_bounces=1
+    how_many_rays=4
+    how_many_bounces=4
     colored_intersections=[]
-    accumulated_k = np.ones(scene.width*scene.height)
+    accumulated_kln = np.ones(scene.width*scene.height)
     ray_type = ['dif']*(scene.width*scene.height)
     #initialization
     for _ in range (scene.width*scene.height):
             initial_color = np.array((0,0,0))
-            list_of_3d_points_and_colors = [(np.array((0,0,0)), np.array((0.5,0.5,0.5)),)]
+            list_of_3d_points_and_colors = [(np.array((0,0,0)), np.array((0,0,0)),)]
             colored_intersections.append((initial_color, list_of_3d_points_and_colors,))
     
     #iterative (non-recursive) path tracing
@@ -98,10 +122,10 @@ def main():
             #compute colors
             for result in results:
                 if result is not None:
-                    point, obj = result
+                    point, _, obj = result
                     old_color, _ = colored_intersections[counter]
-                    new_color = compute_ambient_color(scene, obj) + 
-                    colored_intersections[counter]=(old_color+new_color*accumulated_k[counter],[(point,new_color,)],)
+                    new_color = compute_ambient_color(scene, obj) #add shadow rays term
+                    colored_intersections[counter]=(old_color+new_color*accumulated_kln[counter],[(point,new_color,)],)
                 counter+=1
                 
             #now we create new rays
@@ -109,13 +133,17 @@ def main():
             counter=0
             for result in results:
                 if result is not None:
-                    point, obj = result
+                    point, normal, obj = result
                     ray_type_randomness=0 #toss a random "coin" here. For now, it will always be zero
                     if ray_type_randomness <= obj['kd']: #Case 1: diffuse
                         phi = np.arccos(math.sqrt(uniform(0, 1)))
                         theta = tau*uniform(0,1)
-                        rays.append((point,np.array((np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(phi))),))
-                        accumulated_k[counter]*=obj['kd']
+                        ray_vector=np.array((np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(phi)))
+                        ray_vector=ray_vector/np.linalg.norm(ray_vector)
+                        rays.append((point,ray_vector,))
+                        accumulated_kln[counter]*=obj['kd']*np.dot(ray_vector, normal)
+                else:
+                    rays.append(None)
                 counter+=1
     
     #Here we average the rays

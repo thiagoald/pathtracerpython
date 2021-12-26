@@ -99,16 +99,7 @@ def plot_intersections(widget, intersection_lists):
     
     colors = [[color for point, color in intersection_list] for intersection_list in intersection_lists]
     pts_3d = [[point for point, color in intersection_list] for intersection_list in intersection_lists]
-    #print (np.array(colors))
     widget.addItem(gl.GLScatterPlotItem(pos=np.array(pts_3d),
                                         size=3,
                                         color=np.array(colors),
                                         glOptions='translucent'))
-    '''
-    if screen_pts:
-        pts_2d = [p for _, p in intersections]
-        widget.addItem(gl.GLScatterPlotItem(pos=np.array(pts_2d),
-                                            size=3,
-                                            color=np.array(colors),
-                                            glOptions='translucent'))
-    '''

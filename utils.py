@@ -119,11 +119,14 @@ def intersect(ray, triangle):
 
 
 def make_image(x1, y1, x2, y2, width, height, intersections):
-    mat = np.zeros((height, width, 3), dtype='uint8')
+    mat = np.zeros((height, width, 3), dtype='float64')
     counter =0 
     for color, _ in intersections:
         i=counter//width
         j = counter%width
-        mat[i, j] = np.array(color).astype('uint8')*255
+        mat[height-1-j, i] = np.array(color)
         counter+=1
-    return Image.fromarray(mat)
+    mat = mat - np.min(mat)
+    mat = mat / np.max(mat)
+    mat *= 255
+    return Image.fromarray(mat.astype('uint8'))
