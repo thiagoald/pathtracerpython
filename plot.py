@@ -85,7 +85,6 @@ def plot_camera(widget, eye, color=WHITE_OPAQUE):
 
 def plot_screen(widget, x0, y0, x1, y1, n_pxls_x, n_pxls_y, list_of_2d_colors):
     pts = make_screen_pts(x0, y0, x1, y1, n_pxls_x, n_pxls_y)
-    print (np.array(list_of_2d_colors))
     widget.addItem(gl.GLScatterPlotItem(pos=np.array(
         pts), size=3, color=np.array(list_of_2d_colors), glOptions='translucent'))
 
