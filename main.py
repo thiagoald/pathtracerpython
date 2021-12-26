@@ -11,13 +11,19 @@ from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
 import numpy as np
 import argparse
+from random import uniform
+import math
 
-def compute_ambient_color(obj):
-    color_list = [obj[c] for c in ['red', 'green', 'blue']]
+tau = 6.28
+
+def compute_ambient_color(scene, obj):
+    color_list = [obj[c]*obj['ka']*scene.ambient for c in ['red', 'green', 'blue']]
     color_array = np.array(color_list)
-    return color_array    
+    return color_array
 
 def intersect_objects(ray, objects):
+    if ray is None: #this is actually important because, when ray is none, we still have to count it so results align (otherwise we'd skip it and mix up different pixel's paths)
+        return None
     #returns nearest intersecting object
     intersections = []
     for i, obj in enumerate(objects):
@@ -69,25 +75,50 @@ def main():
     intersections = []
     results = []
     how_many_rays=1
+    how_many_bounces=1
     colored_intersections=[]
     accumulated_k = np.ones(scene.width*scene.height)
+    ray_type = ['dif']*(scene.width*scene.height)
+    #initialization
     for _ in range (scene.width*scene.height):
             initial_color = np.array((0,0,0))
             list_of_3d_points_and_colors = [(np.array((0,0,0)), np.array((0.5,0.5,0.5)),)]
             colored_intersections.append((initial_color, list_of_3d_points_and_colors,))
     
-    for _ in range(how_many_rays):
-        for ray in rays:
-            results+=[intersect_objects(ray, scene.objects)]
-        counter=0
-        for result in results:
-            if result is not None:
-                point, obj = result
-                old_color, _ = colored_intersections[counter]
-                new_color = compute_ambient_color(obj)
-                colored_intersections[counter]=(old_color+new_color*accumulated_k[counter],[(point,new_color,)],)
-            counter+=1
-        
+    #iterative (non-recursive) path tracing
+    for rays_counter in range(how_many_rays):
+        print ('rays_counter is '+ str(rays_counter))
+        for bounces_counter in range (how_many_bounces):
+            print ('bounces_counter is '+ str(bounces_counter))
+            #compute intersections
+            results=[]
+            for ray in rays:
+                results.append(intersect_objects(ray, scene.objects))
+            counter=0
+            #compute colors
+            for result in results:
+                if result is not None:
+                    point, obj = result
+                    old_color, _ = colored_intersections[counter]
+                    new_color = compute_ambient_color(scene, obj) + 
+                    colored_intersections[counter]=(old_color+new_color*accumulated_k[counter],[(point,new_color,)],)
+                counter+=1
+                
+            #now we create new rays
+            rays=[]
+            counter=0
+            for result in results:
+                if result is not None:
+                    point, obj = result
+                    ray_type_randomness=0 #toss a random "coin" here. For now, it will always be zero
+                    if ray_type_randomness <= obj['kd']: #Case 1: diffuse
+                        phi = np.arccos(math.sqrt(uniform(0, 1)))
+                        theta = tau*uniform(0,1)
+                        rays.append((point,np.array((np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(phi))),))
+                        accumulated_k[counter]*=obj['kd']
+                counter+=1
+    
+    #Here we average the rays
     temp_intersections=[]
     for intersec in colored_intersections:
         pixel_color, list_of_3d_points_and_colors = intersec
@@ -103,7 +134,7 @@ def main():
                    show_inter=args.show_inter)
     
     im = make_image(*scene.ortho, scene.width,
-                    scene.height, intersections) #change this to something with colored_intersections later
+                    scene.height, colored_intersections)
     if args.out is not None:
         im.save(args.out)
     if args.show_img:

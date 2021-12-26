@@ -120,10 +120,10 @@ def intersect(ray, triangle):
 
 def make_image(x1, y1, x2, y2, width, height, intersections):
     mat = np.zeros((height, width, 3), dtype='uint8')
-    for pt_3d, pt_2d, color in intersections:
-        if pt_3d is not None:
-            x, y, _ = pt_2d
-            i = int(((y-y1)/(y2-y1))*height)
-            j = int(((x-x1)/(x2-x1))*width)
-            mat[i, j] = np.array(color).astype('uint8')*255
+    counter =0 
+    for color, _ in intersections:
+        i=counter//width
+        j = counter%width
+        mat[i, j] = np.array(color).astype('uint8')*255
+        counter+=1
     return Image.fromarray(mat)
