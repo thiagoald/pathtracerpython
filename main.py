@@ -70,8 +70,9 @@ def main():
     results = []
     how_many_rays=1
     colored_intersections=[]
+    accumulated_k = np.ones(scene.width*scene.height)
     for _ in range (scene.width*scene.height):
-            initial_color = np.array((0,0,1))
+            initial_color = np.array((0,0,0))
             list_of_3d_points_and_colors = [(np.array((0,0,0)), np.array((0.5,0.5,0.5)),)]
             colored_intersections.append((initial_color, list_of_3d_points_and_colors,))
     
@@ -83,7 +84,8 @@ def main():
             if result is not None:
                 point, obj = result
                 old_color, _ = colored_intersections[counter]
-                colored_intersections[counter]=(old_color,[(point,compute_ambient_color(obj),)],)
+                new_color = compute_ambient_color(obj)
+                colored_intersections[counter]=(old_color+new_color*accumulated_k[counter],[(point,new_color,)],)
             counter+=1
         
     temp_intersections=[]
