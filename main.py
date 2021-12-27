@@ -3,6 +3,10 @@
 # Example:
 #  $ ./main.py objs/cornellroom.sdl --show-scene --show-img --out out.png -r 1 -b 2
 
+from numba import njit
+from numba.extending import overload
+from numba.typed import List
+
 from scene_reader import Scene
 from plot import plot_scene
 from utils import (NoIntersection, make_rays, make_screen_pts, intersect,
@@ -19,7 +23,7 @@ import math
 TAU = 6.28
 ZERO = 1E-5
 
-def compute_shadow_rays(scene, point, normal, n_light_samples=3):
+def compute_shadow_rays(scene, point, normal, n_light_samples=1):
     '''
     Return the color of a point from direct illumination by the light source
     '''
@@ -79,6 +83,29 @@ def compute_ambient_color(scene, obj):
     color_array = np.array(color_list)
     return color_array
 
+@njit
+def intersection_helper(point, vector, objs_data_triangles, objs_data_normals):    
+    intersections = List()
+    intersections.append([np.array((0.,0.,0.)),np.array((0.,0.,0.)),np.array((0.,0.,0.)),np.array((0.,0.,0.)),np.array((0.,0.,0.))])
+    ray = point, vector
+    for i, triangles in enumerate(objs_data_triangles):
+        for j, triangle in enumerate(triangles):
+            old_triangle= triangle
+            triangle= List()
+            [triangle.append(x) for x in old_triangle]
+            pt_3d = intersect(point, vector, triangle)
+            ray_point, ray_vector = ray
+            if squared_dist(pt_3d, ray_point)>ZERO:
+                pt_screen = ray[0] + ray[1]
+                sq= squared_dist(pt_3d, ray[0])
+                
+                i_float = float(i)
+                intersections.append([np.array((sq, sq, sq)),pt_3d,pt_screen,  objs_data_normals[i][j],np.array((i_float,i_float,i_float))])
+            else:
+                intersections.append([np.array((0.,0.,0.)),np.array((0.,0.,0.)),np.array((0.,0.,0.)),np.array((0.,0.,0.)),np.array((0.,0.,0.))])
+    intersections.pop(0)
+    return intersections
+
 
 def intersect_objects(ray, objects, light_obj):
     '''Return intersection point, triangle normal and object'''
@@ -90,25 +117,34 @@ def intersect_objects(ray, objects, light_obj):
     # adds light to object list
     myObjects = objects + [{'geometry': light_obj}]
     # returns nearest intersecting object
-    intersections = []
-    for i, obj in enumerate(myObjects):
-        for triangle, normal in zip(obj['geometry'].triangles,
-                                    obj['geometry'].normals):
-            try:
-                pt_3d = intersect(ray, triangle)
-                ray_point, ray_vector = ray
-                if pt_3d is not None and squared_dist(pt_3d, ray_point)>ZERO:
-                    pt_screen = ray[0] + ray[1]
-                    intersections.append(
-                        [squared_dist(pt_3d, ray[0]),
-                         pt_3d,
-                         pt_screen,
-                         normal,
-                         i])
-            except NoIntersection:
-                pass
-
-    if intersections == []:
+    objs_data_triangles=List()
+    objs_data_normals=List()
+    for obj in myObjects:
+        obj_triangles=List()
+        obj_normals=List()
+        for triangle in obj['geometry'].triangles:
+            np_triangle=List()
+            for vector in triangle:
+                np_vector= List()
+                for x in np.array(vector).tolist():
+                    np_vector.append(x)
+                np_triangle.append(np_vector)
+            obj_triangles.append(np_triangle)
+        for normal in obj['geometry'].normals:
+            obj_normals.append(np.array(normal))
+        objs_data_triangles.append(obj_triangles)
+        objs_data_normals.append (obj_normals)
+    ray_point, ray_vector = ray
+    intersections = intersection_helper(np.array(ray_point), np.array(ray_vector), objs_data_triangles, objs_data_normals)
+    intersections = [ (sq[0],pt_3d,pt_screen,normal,int(index[0])) for [sq,pt_3d,pt_screen,normal,index] in intersections]
+    #print (intersections[3])
+    new_intersections = []
+    for sq,pt_3d,pt_screen,normal,index in intersections:
+        if not (pt_3d[0]==0 and pt_3d[1]==0 and pt_3d[2]==0):
+            new_intersections.append((sq,pt_3d,pt_screen,normal,index))
+    intersections = new_intersections
+    if len(intersections) == 0:
+        #print ('eita')
         return None
     else:
         # Only return the closest
@@ -141,14 +177,16 @@ def setup():
 
 def compute_color(scene, obj, point, normal):
     amb = compute_ambient_color(scene, obj)
-    sha = compute_shadow_rays(scene, point, normal)
-    return ( amb +sha )
+    #sha = compute_shadow_rays(scene, point, normal)
+    return ( amb )
 
 def rotate(axis, angle, v):
     """
     Return the counterclockwise rotation about
     the given axis by 'angle' radians.
     """
+    if (np.linalg.norm(axis)<ZERO):
+        return v
     axis = axis / np.linalg.norm(axis)
     a = math.cos(angle / 2.0)
     b, c, d = -axis * math.sin(angle / 2.0)
@@ -189,16 +227,10 @@ def main():
             print('bounces_counter is ' + str(bounces_counter))
             # compute intersections
             results = []
-            print('intersecting...')
-            with Pool(cpu_count()) as pool:
-                print('creating threads...')
-                for ray in tqdm(rays):
-                    results.append(pool.apply_async(
-                        intersect_objects, (ray, scene.objects, scene.light_obj)))
-                print('getting results...')
-                for i in tqdm(range(len(results))):
-                    results[i] = results[i].get()
-
+            print('intersecting...')       
+            for ray in tqdm(rays):
+                results.append(intersect_objects(ray, scene.objects, scene.light_obj))
+            print (results[0])
             # compute colors
             print('calculating colors...')
             with Pool(cpu_count()) as pool:
@@ -240,17 +272,19 @@ def main():
                                                    np.sin(phi)*np.sin(theta),
                                                    np.cos(phi)))
                             ray_vector = ray_vector/np.linalg.norm(ray_vector)
-                            ray_vector = rotate(np.array((0,1,0)), np.arccos(np.dot(np.array((0,1,0)), normal)), ray_vector)
+                            local_axis = np.cross(np.array((0, 1, 0)), normal)
+                            ray_vector = rotate(local_axis, np.arccos(np.dot(np.array((0,1,0)), normal)), ray_vector)
                             rays.append((point, ray_vector))
                             accumulated_k[i_ray] *= obj['kd'] * \
                                 np.dot(ray_vector, normal)
                         else:
-                            _, old_ray_vector = old_rays[i_ray]
+                            _, old_ray_vector = old_rays[i_ray] #Case 2: specular
                             ray_vector = np.dot(normal, old_ray_vector)*2*normal - old_ray_vector
                             ray_vector = ray_vector/np.linalg.norm(ray_vector)
                             eye_vector = scene.eye - point
                             eye_vector = eye_vector/np.linalg.norm(eye_vector)
-                            ray_vector = rotate(np.array((0,1,0)), np.arccos(np.dot(np.array((0,1,0)), normal)), ray_vector)
+                            local_axis = np.cross(np.array((0, 1, 0)), normal)
+                            ray_vector = rotate(local_axis, np.arccos(np.dot(np.array((0,1,0)), normal)), ray_vector)
                             rays.append((point, ray_vector))
                             accumulated_k[i_ray] *= obj['ks'] * \
                                 ((np.dot(eye_vector, ray_vector))**obj['n'])
