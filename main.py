@@ -10,6 +10,7 @@ from utils import (NoIntersection, make_rays, make_screen_pts, intersect,
                    pick_random_triangle)
 from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
+from multiprocessing.pool import ApplyResult
 import numpy as np
 import argparse
 from random import uniform
@@ -41,7 +42,7 @@ def compute_shadow_rays(scene, obj, point, normal, n_light_samples=10):
                     pt_3d = intersect(ray, triangle)
                     if pt_3d is not None and squared_dist(pt_3d, point) < light_squared_distance:
                         shadow_vectors.append(None)
-                        done=True
+                        done = True
                         break
                 except NoIntersection:
                     pass
@@ -81,8 +82,8 @@ def intersect_objects(ray, objects, light_obj):
     # (otherwise we'd skip it and mix up different pixel's paths)
     if ray is None:
         return None
-    #adds light to object list
-    myObjects = objects + [{'geometry':light_obj}]
+    # adds light to object list
+    myObjects = objects + [{'geometry': light_obj}]
     # returns nearest intersecting object
     intersections = []
     for i, obj in enumerate(myObjects):
@@ -108,10 +109,10 @@ def intersect_objects(ray, objects, light_obj):
         closest_inter = min(intersections, key=lambda inter: inter[0])
         i_obj = closest_inter[-1]
         obj = myObjects[i_obj]
-        if obj['geometry']==light_obj:
-            isItLight=True
+        if obj['geometry'] == light_obj:
+            isItLight = True
         else:
-            isItLight=False
+            isItLight = False
         return (closest_inter[1], closest_inter[3], obj, isItLight)
 
 
@@ -130,6 +131,11 @@ def setup():
     parser.add_argument('--show-inter', default=False, action='store_true')
     args = parser.parse_args()
     return args
+
+
+def compute_color(scene, obj, point, normal):
+    return (compute_ambient_color(scene, obj) +
+            compute_shadow_rays(scene, obj, point, normal))
 
 
 def main():
@@ -166,30 +172,41 @@ def main():
             results = []
             print('intersecting...')
             with Pool(cpu_count()) as pool:
+                print('creating threads...')
                 for ray in tqdm(rays):
                     results.append(pool.apply_async(
                         intersect_objects, (ray, scene.objects, scene.light_obj)))
-                for i in range(len(results)):
+                print('getting results...')
+                for i in tqdm(range(len(results))):
                     results[i] = results[i].get()
 
-            counter = 0
             # compute colors
             print('calculating colors...')
-            for result in tqdm(results):
-                if result is not None:
-                    point, normal, obj, isItLight = result
-                    old_color, _ = colored_intersections[counter]
-                    if isItLight:
-                        new_color = np.array(scene.light_color)
+            with Pool(cpu_count()) as pool:
+                new_colors = []
+                print('creating threads...')
+                for i_ray, result in tqdm(list(enumerate(results))):
+                    if result is not None:
+                        point, normal, obj, isItLight = result
+                        if isItLight:
+                            new_colors.append(np.array(scene.light_color))
+                        else:
+                            new_colors.append(
+                                pool.apply_async(compute_color,
+                                                 (scene, obj, point, normal)))
                     else:
-                        new_color = compute_ambient_color(
-                        scene, obj) + compute_shadow_rays(scene, obj, point, normal)  
-                    colored_intersections[counter] = (
-                        old_color+new_color*accumulated_k[counter], [(point, new_color,)],)
-                counter += 1
+                        new_colors.append(None)
+                print('getting results...')
+                for i_ray, new_color in tqdm(list(enumerate(new_colors))):
+                    if new_color is not None:
+                        if type(new_color) is ApplyResult:
+                            new_color = new_color.get()
+                        old_color, _ = colored_intersections[i_ray]
+                        colored_intersections[i_ray] = (
+                            old_color+new_color*accumulated_k[i_ray], [(point, new_color,)])
 
             # now we create new rays
-            old_rays=rays
+            old_rays = rays
             rays = []
             counter = 0
             for result in results:
@@ -208,18 +225,21 @@ def main():
                             accumulated_k[counter] *= obj['kd'] * \
                                 np.dot(ray_vector, normal)
                         else:
-                            ray_vector = 2*normal*np.dot(normal, old_rays[counter]) - old_rays[counter]
+                            ray_vector = 2*normal * \
+                                np.dot(
+                                    normal, old_rays[counter]) - old_rays[counter]
                             ray_vector = ray_vector/np.linalg.norm(ray_vector)
                             eye_vector = scene.eye - point
                             eye_vector = eye_vector/np.linalg.norm(eye_vector)
                             rays.append((point, ray_vector))
-                            accumulated_k *= obj['ks'] * ((np.dot(eye_vector, ray_vector))**obj['n'])
+                            accumulated_k *= obj['ks'] * \
+                                ((np.dot(eye_vector, ray_vector))**obj['n'])
                     else:
                         rays.append(None)
                 else:
                     rays.append(None)
                 counter += 1
-        
+
     # Here we average the rays
     temp_intersections = []
     for intersec in colored_intersections:
