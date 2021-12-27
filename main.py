@@ -63,7 +63,7 @@ def compute_shadow_rays(scene, obj, point, normal, n_light_samples=10):
             dot += np.dot(shadow_vector, normal)
     dot /= len(shadow_vectors)
     obj_color = [obj[c] for c in ['red', 'green', 'blue']]
-    color = [c_light*c_obj*dot for c_light,
+    color = [c_light*c_obj*dot*obj['kd'] for c_light,
              c_obj in zip(light_color, obj_color)]
     return np.array(color)
 
