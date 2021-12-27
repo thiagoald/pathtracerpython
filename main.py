@@ -33,13 +33,24 @@ def compute_shadow_rays(scene, obj, point, normal, n_light_samples=10):
         light_pt = sample_random_pt(light_tri)
         # intersect
         ray = (point, light_pt - point)
-        try:
-            intersect(ray, light_tri)
-            # Shadow ray blocked by object
-            shadow_vectors.append(None)
-        except NoIntersection:
-            # Shadow ray unobstructed
+        light_squared_distance = squared_dist(point, light_pt)
+        done = False
+        for obj in scene.objects:
+            for triangle in obj['geometry'].triangles:
+                try:
+                    pt_3d = intersect(ray, triangle)
+                    if pt_3d is not None and squared_dist(pt_3d, point) < light_squared_distance:
+                        shadow_vectors.append(None)
+                        done=True
+                        break
+                except NoIntersection:
+                    pass
+            if done:
+                break
+        if not done:
             shadow_vectors.append(light_pt - point)
+        else:
+            shadow_vectors.append(None)
 
     # compute light color
     light_color = scene.light_color
@@ -63,16 +74,18 @@ def compute_ambient_color(scene, obj):
     return color_array
 
 
-def intersect_objects(ray, objects):
+def intersect_objects(ray, objects, light_obj):
     '''Return intersection point, triangle normal and object'''
     # this is actually important because, when ray is none, we still have to
     # count it so results align
     # (otherwise we'd skip it and mix up different pixel's paths)
     if ray is None:
         return None
+    #adds light to object list
+    myObjects = objects + [{'geometry':light_obj}]
     # returns nearest intersecting object
     intersections = []
-    for i, obj in enumerate(objects):
+    for i, obj in enumerate(myObjects):
         for triangle, normal in zip(obj['geometry'].triangles,
                                     obj['geometry'].normals):
             try:
@@ -94,8 +107,12 @@ def intersect_objects(ray, objects):
         # Only return the closest
         closest_inter = min(intersections, key=lambda inter: inter[0])
         i_obj = closest_inter[-1]
-        obj = objects[i_obj]
-        return (closest_inter[1], closest_inter[3], obj)
+        obj = myObjects[i_obj]
+        if obj['geometry']==light_obj:
+            isItLight=True
+        else:
+            isItLight=False
+        return (closest_inter[1], closest_inter[3], obj, isItLight)
 
 
 def setup():
@@ -149,15 +166,18 @@ def main():
             results = []
             print('intersecting...')
             for ray in tqdm(rays):
-                results.append(intersect_objects(ray, scene.objects))
+                results.append(intersect_objects(ray, scene.objects, scene.light_obj))
             counter = 0
             # compute colors
             print('calculating colors...')
             for result in tqdm(results):
                 if result is not None:
-                    point, normal, obj = result
+                    point, normal, obj, isItLight = result
                     old_color, _ = colored_intersections[counter]
-                    new_color = compute_ambient_color(
+                    if isItLight:
+                        new_color = np.array(scene.light_color)
+                    else:
+                        new_color = compute_ambient_color(
                         scene, obj) + compute_shadow_rays(scene, obj, point, normal)  
                     colored_intersections[counter] = (
                         old_color+new_color*accumulated_k[counter], [(point, new_color,)],)
@@ -169,25 +189,28 @@ def main():
             counter = 0
             for result in results:
                 if result is not None:
-                    point, normal, obj = result
-                    ray_type_randomness = uniform(0, obj['kd']+obj['ks'])  # toss a random "coin" here. For now, it will always be zero
-                    if ray_type_randomness <= obj['kd']:  # Case 1: diffuse
-                        phi = np.arccos(math.sqrt(uniform(0, 1)))
-                        theta = TAU*uniform(0, 1)
-                        ray_vector = np.array((np.sin(theta)*np.cos(phi),
-                                               np.sin(theta)*np.sin(phi),
-                                               np.cos(theta)))
-                        ray_vector = ray_vector/np.linalg.norm(ray_vector)
-                        rays.append((point, ray_vector))
-                        accumulated_k[counter] *= obj['kd'] * \
-                            np.dot(ray_vector, normal)
+                    point, normal, obj, isItLight = result
+                    if not isItLight:
+                        ray_type_randomness = uniform(0, obj['kd']+obj['ks'])
+                        if ray_type_randomness <= obj['kd']:  # Case 1: diffuse
+                            phi = np.arccos(math.sqrt(uniform(0, 1)))
+                            theta = TAU*uniform(0, 1)
+                            ray_vector = np.array((np.sin(theta)*np.cos(phi),
+                                                   np.sin(theta)*np.sin(phi),
+                                                   np.cos(phi)))
+                            ray_vector = ray_vector/np.linalg.norm(ray_vector)
+                            rays.append((point, ray_vector))
+                            accumulated_k[counter] *= obj['kd'] * \
+                                np.dot(ray_vector, normal)
+                        else:
+                            ray_vector = 2*normal*np.dot(normal, old_ray[counter]) - old_rays[counter]
+                            ray_vector = ray_vector/np.linalg.norm(ray_vector)
+                            eye_vector = scene.eye - point
+                            eye_vector = eye_vector/np.linalg.norm(eye_vector)
+                            rays.append((point, ray_vector))
+                            accumulated_k *= obj['ks'] * ((np.dot(eye_vector, ray_vector))**obj['n'])
                     else:
-                        ray_vector = 2*normal*np.dot(normal, old_ray[counter]) - old_rays[counter]
-                        ray_vector = ray_vector/np.linalg.norm(ray_vector)
-                        eye_vector = scene.eye - point
-                        eye_vector = eye_vector/np.linalg.norm(eye_vector)
-                        rays.append((point, ray_vector))
-                        accumulated_k *= obj['ks'] * ((np.dot(eye_vector, ray_vector))**obj['n'])
+                        rays.append(None)
                 else:
                     rays.append(None)
                 counter += 1
