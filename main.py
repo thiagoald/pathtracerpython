@@ -68,7 +68,7 @@ def compute_shadow_rays(scene, point, normal, n_light_samples=3):
             dot += np.dot(shadow_vector, normal)
     dot /= len(shadow_vectors)
     obj_color = [obj[c] for c in ['red', 'green', 'blue']]
-    color = [c_light*c_obj*dot*obj['kd'] for c_light,
+    color = [c_light*c_obj*dot for c_light,
              c_obj in zip(light_color, obj_color)]
     return np.array(color)
 
@@ -144,6 +144,20 @@ def compute_color(scene, obj, point, normal):
     sha = compute_shadow_rays(scene, point, normal)
     return ( amb +sha )
 
+def rotate(axis, angle, v):
+    """
+    Return the counterclockwise rotation about
+    the given axis by 'angle' radians.
+    """
+    axis = axis / np.linalg.norm(axis)
+    a = math.cos(angle / 2.0)
+    b, c, d = -axis * math.sin(angle / 2.0)
+    aa, bb, cc, dd = a * a, b * b, c * c, d * d
+    bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
+    rotation_matrix = np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+                     [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+    return np.dot(rotation_matrix, v)
 
 def main():
     args = setup()
@@ -214,8 +228,7 @@ def main():
             # now we create new rays
             old_rays = rays
             rays = []
-            counter = 0
-            for result in results:
+            for i_ray, result in enumerate(results):
                 if result is not None:
                     point, normal, obj, isItLight = result
                     if not isItLight:
@@ -223,27 +236,28 @@ def main():
                         if ray_type_randomness <= obj['kd']:  # Case 1: diffuse
                             phi = np.arccos(math.sqrt(uniform(0, 1)))
                             theta = TAU*uniform(0, 1)
-                            ray_vector = np.array((np.sin(theta)*np.cos(phi),
-                                                   np.sin(theta)*np.sin(phi),
+                            ray_vector = np.array((np.sin(phi)*np.cos(theta),
+                                                   np.sin(phi)*np.sin(theta),
                                                    np.cos(phi)))
                             ray_vector = ray_vector/np.linalg.norm(ray_vector)
+                            ray_vector = rotate(np.array((0,1,0)), np.arccos(np.dot(np.array((0,1,0)), normal)), ray_vector)
                             rays.append((point, ray_vector))
-                            accumulated_k[counter] *= obj['kd'] * \
+                            accumulated_k[i_ray] *= obj['kd'] * \
                                 np.dot(ray_vector, normal)
                         else:
-                            _, old_ray_vector = old_rays[counter]
+                            _, old_ray_vector = old_rays[i_ray]
                             ray_vector = np.dot(normal, old_ray_vector)*2*normal - old_ray_vector
                             ray_vector = ray_vector/np.linalg.norm(ray_vector)
                             eye_vector = scene.eye - point
                             eye_vector = eye_vector/np.linalg.norm(eye_vector)
+                            ray_vector = rotate(np.array((0,1,0)), np.arccos(np.dot(np.array((0,1,0)), normal)), ray_vector)
                             rays.append((point, ray_vector))
-                            accumulated_k *= obj['ks'] * \
+                            accumulated_k[i_ray] *= obj['ks'] * \
                                 ((np.dot(eye_vector, ray_vector))**obj['n'])
                     else:
                         rays.append(None)
                 else:
                     rays.append(None)
-                counter += 1
         for i, intersec in enumerate(colored_intersections):
             pixel_color, list_of_3d_points_and_colors = intersec
             pixel_color_list[i]+=pixel_color
