@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Example:
-#  $ ./main.py objs/cornellroom.sdl --show-scene --show-img --out out.png
+#  $ ./main.py objs/cornellroom.sdl --show-scene --show-img --out out.png -r 1 -b 2
 
 from scene_reader import Scene
 from plot import plot_scene
@@ -17,9 +17,9 @@ from random import uniform
 import math
 
 TAU = 6.28
+ZERO = 1E-5
 
-
-def compute_shadow_rays(scene, obj, point, normal, n_light_samples=10):
+def compute_shadow_rays(scene, point, normal, n_light_samples=3):
     '''
     Return the color of a point from direct illumination by the light source
     '''
@@ -33,25 +33,30 @@ def compute_shadow_rays(scene, obj, point, normal, n_light_samples=10):
         # Random point in this triangle
         light_pt = sample_random_pt(light_tri)
         # intersect
-        ray = (point, light_pt - point)
+        ray_vector = light_pt - point
+        ray_vector = ray_vector/np.linalg.norm(ray_vector)
+        ray = (point, ray_vector)
         light_squared_distance = squared_dist(point, light_pt)
         done = False
         for obj in scene.objects:
             for triangle in obj['geometry'].triangles:
                 try:
                     pt_3d = intersect(ray, triangle)
-                    if pt_3d is not None and squared_dist(pt_3d, point) < light_squared_distance:
-                        shadow_vectors.append(None)
+                    inter_squared_distance = squared_dist(pt_3d, point)
+                    if inter_squared_distance < ZERO: #intersection point is the point itself
+                        continue
+                    if pt_3d is not None and inter_squared_distance < light_squared_distance:
                         done = True
                         break
                 except NoIntersection:
                     pass
             if done:
                 break
-        if not done:
-            shadow_vectors.append(light_pt - point)
+        if done:
+          shadow_vectors.append(None)
         else:
-            shadow_vectors.append(None)
+          shadow_vectors.append(ray_vector)
+            
 
     # compute light color
     light_color = scene.light_color
@@ -91,7 +96,8 @@ def intersect_objects(ray, objects, light_obj):
                                     obj['geometry'].normals):
             try:
                 pt_3d = intersect(ray, triangle)
-                if pt_3d is not None:
+                ray_point, ray_vector = ray
+                if pt_3d is not None and squared_dist(pt_3d, ray_point)>ZERO:
                     pt_screen = ray[0] + ray[1]
                     intersections.append(
                         [squared_dist(pt_3d, ray[0]),
@@ -134,8 +140,9 @@ def setup():
 
 
 def compute_color(scene, obj, point, normal):
-    return (compute_ambient_color(scene, obj) +
-            compute_shadow_rays(scene, obj, point, normal))
+    amb = compute_ambient_color(scene, obj)
+    sha = compute_shadow_rays(scene, point, normal)
+    return ( amb +sha )
 
 
 def main():
@@ -143,29 +150,27 @@ def main():
     scene = Scene(args.scene)
     screen_pts = make_screen_pts(
         *scene.ortho, scene.width, scene.height)
-    rays = make_rays(scene.eye, screen_pts)
     print(f'Number of objects: {len(scene.objects)}')
     print(
         f'Number of triangles: {sum([len(o["geometry"].triangles) for o in scene.objects])}')
-    print(f'Number of rays: {len(rays)}')
     results = []
     how_many_rays = args.n_rays
-    how_many_bounces = args.n_bounces
-    colored_intersections = []
-    accumulated_k = np.ones(scene.width*scene.height)
-    ray_type = ['dif']*(scene.width*scene.height)
+    how_many_bounces = args.n_bounces    
     # initialization
+    colored_intersections=[]
     for _ in range(scene.width*scene.height):
         initial_color = np.array((0, 0, 0))
-        list_of_3d_points_and_colors = [
+        initial_list_of_3d_points_and_colors = [
             (np.array((0, 0, 0)), np.array((0, 0, 0)),)]
         colored_intersections.append(
-            (initial_color, list_of_3d_points_and_colors,))
-
+            (initial_color, initial_list_of_3d_points_and_colors,))
     # iterative (non-recursive) path tracing
+    pixel_color_list=[0]*(scene.width*scene.height)
     for rays_counter in range(how_many_rays):
         print('rays_counter is ' + str(rays_counter))
+        colored_intersections = [(initial_color, initial_list_of_3d_points_and_colors) for intersec in colored_intersections]
         accumulated_k = np.ones(scene.width*scene.height)
+        rays = make_rays(scene.eye, screen_pts)
         for bounces_counter in range(how_many_bounces):
             print('bounces_counter is ' + str(bounces_counter))
             # compute intersections
@@ -197,8 +202,9 @@ def main():
                     else:
                         new_colors.append(None)
                 print('getting results...')
-                for i_ray, new_color in tqdm(list(enumerate(new_colors))):
+                for i_ray, new_color in tqdm(list(enumerate(new_colors))): #tqdm(list(enumerate(new_colors))):
                     if new_color is not None:
+                        point, _,_,_ = results[i_ray]
                         if type(new_color) is ApplyResult:
                             new_color = new_color.get()
                         old_color, _ = colored_intersections[i_ray]
@@ -225,9 +231,8 @@ def main():
                             accumulated_k[counter] *= obj['kd'] * \
                                 np.dot(ray_vector, normal)
                         else:
-                            ray_vector = 2*normal * \
-                                np.dot(
-                                    normal, old_rays[counter]) - old_rays[counter]
+                            _, old_ray_vector = old_rays[counter]
+                            ray_vector = np.dot(normal, old_ray_vector)*2*normal - old_ray_vector
                             ray_vector = ray_vector/np.linalg.norm(ray_vector)
                             eye_vector = scene.eye - point
                             eye_vector = eye_vector/np.linalg.norm(eye_vector)
@@ -239,12 +244,15 @@ def main():
                 else:
                     rays.append(None)
                 counter += 1
+        for i, intersec in enumerate(colored_intersections):
+            pixel_color, list_of_3d_points_and_colors = intersec
+            pixel_color_list[i]+=pixel_color
 
     # Here we average the rays
     temp_intersections = []
-    for intersec in colored_intersections:
-        pixel_color, list_of_3d_points_and_colors = intersec
-        pixel_color = [c/how_many_rays for c in pixel_color]
+    for i, intersec in enumerate(colored_intersections):
+        _, list_of_3d_points_and_colors = intersec
+        pixel_color = pixel_color_list[i]/how_many_rays
         temp_intersections += [(pixel_color, list_of_3d_points_and_colors,)]
 
     colored_intersections = temp_intersections
