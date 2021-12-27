@@ -19,6 +19,7 @@ import math
 TAU = 6.28
 ZERO = 1E-5
 
+
 def compute_shadow_rays(scene, point, normal, n_light_samples=3):
     '''
     Return the color of a point from direct illumination by the light source
@@ -43,7 +44,7 @@ def compute_shadow_rays(scene, point, normal, n_light_samples=3):
                 try:
                     pt_3d = intersect(ray, triangle)
                     inter_squared_distance = squared_dist(pt_3d, point)
-                    if inter_squared_distance < ZERO: #intersection point is the point itself
+                    if inter_squared_distance < ZERO:  # intersection point is the point itself
                         continue
                     if pt_3d is not None and inter_squared_distance < light_squared_distance:
                         done = True
@@ -53,10 +54,9 @@ def compute_shadow_rays(scene, point, normal, n_light_samples=3):
             if done:
                 break
         if done:
-          shadow_vectors.append(None)
+            shadow_vectors.append(None)
         else:
-          shadow_vectors.append(ray_vector)
-            
+            shadow_vectors.append(ray_vector)
 
     # compute light color
     light_color = scene.light_color
@@ -97,7 +97,7 @@ def intersect_objects(ray, objects, light_obj):
             try:
                 pt_3d = intersect(ray, triangle)
                 ray_point, ray_vector = ray
-                if pt_3d is not None and squared_dist(pt_3d, ray_point)>ZERO:
+                if pt_3d is not None and squared_dist(pt_3d, ray_point) > ZERO:
                     pt_screen = ray[0] + ray[1]
                     intersections.append(
                         [squared_dist(pt_3d, ray[0]),
@@ -142,7 +142,8 @@ def setup():
 def compute_color(scene, obj, point, normal):
     amb = compute_ambient_color(scene, obj)
     sha = compute_shadow_rays(scene, point, normal)
-    return ( amb +sha )
+    return (amb + sha)
+
 
 def rotate(axis, angle, v):
     """
@@ -154,10 +155,12 @@ def rotate(axis, angle, v):
     b, c, d = -axis * math.sin(angle / 2.0)
     aa, bb, cc, dd = a * a, b * b, c * c, d * d
     bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
-    rotation_matrix = np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
-                     [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
-                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+    rotation_matrix = np.array(
+        [[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+         [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+         [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
     return np.dot(rotation_matrix, v)
+
 
 def main():
     args = setup()
@@ -169,9 +172,9 @@ def main():
         f'Number of triangles: {sum([len(o["geometry"].triangles) for o in scene.objects])}')
     results = []
     how_many_rays = args.n_rays
-    how_many_bounces = args.n_bounces    
+    how_many_bounces = args.n_bounces
     # initialization
-    colored_intersections=[]
+    colored_intersections = []
     for _ in range(scene.width*scene.height):
         initial_color = np.array((0, 0, 0))
         initial_list_of_3d_points_and_colors = [
@@ -179,10 +182,11 @@ def main():
         colored_intersections.append(
             (initial_color, initial_list_of_3d_points_and_colors,))
     # iterative (non-recursive) path tracing
-    pixel_color_list=[0]*(scene.width*scene.height)
+    pixel_color_list = [0]*(scene.width*scene.height)
     for rays_counter in range(how_many_rays):
         print('rays_counter is ' + str(rays_counter))
-        colored_intersections = [(initial_color, initial_list_of_3d_points_and_colors) for intersec in colored_intersections]
+        colored_intersections = [(initial_color, initial_list_of_3d_points_and_colors)
+                                 for intersec in colored_intersections]
         accumulated_k = np.ones(scene.width*scene.height)
         rays = make_rays(scene.eye, screen_pts)
         for bounces_counter in range(how_many_bounces):
@@ -216,9 +220,10 @@ def main():
                     else:
                         new_colors.append(None)
                 print('getting results...')
-                for i_ray, new_color in tqdm(list(enumerate(new_colors))): #tqdm(list(enumerate(new_colors))):
+                # tqdm(list(enumerate(new_colors))):
+                for i_ray, new_color in tqdm(list(enumerate(new_colors))):
                     if new_color is not None:
-                        point, _,_,_ = results[i_ray]
+                        point, _, _, _ = results[i_ray]
                         if type(new_color) is ApplyResult:
                             new_color = new_color.get()
                         old_color, _ = colored_intersections[i_ray]
@@ -240,17 +245,20 @@ def main():
                                                    np.sin(phi)*np.sin(theta),
                                                    np.cos(phi)))
                             ray_vector = ray_vector/np.linalg.norm(ray_vector)
-                            ray_vector = rotate(np.array((0,1,0)), np.arccos(np.dot(np.array((0,1,0)), normal)), ray_vector)
+                            ray_vector = rotate(np.array((0, 1, 0)), np.arccos(
+                                np.dot(np.array((0, 1, 0)), normal)), ray_vector)
                             rays.append((point, ray_vector))
                             accumulated_k[i_ray] *= obj['kd'] * \
                                 np.dot(ray_vector, normal)
                         else:
                             _, old_ray_vector = old_rays[i_ray]
-                            ray_vector = np.dot(normal, old_ray_vector)*2*normal - old_ray_vector
+                            ray_vector = np.dot(
+                                normal, old_ray_vector)*2*normal - old_ray_vector
                             ray_vector = ray_vector/np.linalg.norm(ray_vector)
                             eye_vector = scene.eye - point
                             eye_vector = eye_vector/np.linalg.norm(eye_vector)
-                            ray_vector = rotate(np.array((0,1,0)), np.arccos(np.dot(np.array((0,1,0)), normal)), ray_vector)
+                            ray_vector = rotate(np.array((0, 1, 0)), np.arccos(
+                                np.dot(np.array((0, 1, 0)), normal)), ray_vector)
                             rays.append((point, ray_vector))
                             accumulated_k[i_ray] *= obj['ks'] * \
                                 ((np.dot(eye_vector, ray_vector))**obj['n'])
@@ -260,7 +268,7 @@ def main():
                     rays.append(None)
         for i, intersec in enumerate(colored_intersections):
             pixel_color, list_of_3d_points_and_colors = intersec
-            pixel_color_list[i]+=pixel_color
+            pixel_color_list[i] += pixel_color
 
     # Here we average the rays
     temp_intersections = []
