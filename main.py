@@ -119,9 +119,9 @@ def setup():
     parser = argparse.ArgumentParser()
     parser.add_argument('scene', help='SDL scene')
     parser.add_argument('--out', help='Output image')
-    parser.add_argument('-r', dest='n_rays', type=int,
+    parser.add_argument('-r', dest='n_rays', type=int, default=1,
                         help='Number of rays per pixel')
-    parser.add_argument('-b', dest='n_bounces', type=int,
+    parser.add_argument('-b', dest='n_bounces', type=int, default=1,
                         help='Number of bounces')
     parser.add_argument('--show-img', default=False, action='store_true')
     parser.add_argument('--show-scene', default=False, action='store_true')
@@ -165,8 +165,13 @@ def main():
             # compute intersections
             results = []
             print('intersecting...')
-            for ray in tqdm(rays):
-                results.append(intersect_objects(ray, scene.objects, scene.light_obj))
+            with Pool(cpu_count()) as pool:
+                for ray in tqdm(rays):
+                    results.append(pool.apply_async(
+                        intersect_objects, (ray, scene.objects, scene.light_obj)))
+                for i in range(len(results)):
+                    results[i] = results[i].get()
+
             counter = 0
             # compute colors
             print('calculating colors...')
@@ -203,7 +208,7 @@ def main():
                             accumulated_k[counter] *= obj['kd'] * \
                                 np.dot(ray_vector, normal)
                         else:
-                            ray_vector = 2*normal*np.dot(normal, old_ray[counter]) - old_rays[counter]
+                            ray_vector = 2*normal*np.dot(normal, old_rays[counter]) - old_rays[counter]
                             ray_vector = ray_vector/np.linalg.norm(ray_vector)
                             eye_vector = scene.eye - point
                             eye_vector = eye_vector/np.linalg.norm(eye_vector)
