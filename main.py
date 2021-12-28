@@ -70,29 +70,6 @@ def compute_ambient_color(scene, obj):
     color_array = np.array(color_list)
     return color_array
 
-'''
-def intersection_helper(data):
-    pos = cuda.grid(1)
-    if pos<data.size:
-        triangle = data[pos,:,:2]
-        normal = data[pos,:,3]
-        obj_index = data[pos,0, 4]
-        ray_point = data[pos,:,5].T
-        ray_vector = data[pos,:,6].T
-        intersections = [[-1.,-1.,-1.],[0.,0.,0.],[0.,0.,0.],[0.,0.,0.],[0.,0.,0.]]
-        ray = ray_point, ray_vector
-        pt_3d = intersect(ray_point, ray_vector, triangle)
-        if squared_dist(pt_3d, ray_point)>ZERO:
-            pt_screen = ray[0] + ray[1]
-            sq= squared_dist(pt_3d, ray[0])
-            intersections.append([np.array((sq, sq, sq)),pt_3d,pt_screen, normal ,np.array((obj_index, obj_index, obj_index))])
-        else:
-            intersections.append([np.array((-1.,-1.,-1.)),np.array((0.,0.,0.)),np.array((0.,0.,0.)),np.array((0.,0.,0.)),np.array((0.,0.,0.))])
-        intersections.pop(0)
-        intersections = np.array(intersections)
-        data[pos]=intersections.reshape(data[pos].shape)
-'''
-
 def organize_objs_data(objects, ray):
     ray_point, ray_vector = ray
     objs_data_triangles=[]
