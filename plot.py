@@ -28,10 +28,10 @@ def show():
 def plot_scene(scene, rays, data,
                show_normals=False, show_screen=False, show_inter=False):
     w = init()
-    if not show_inter:
+    if show_inter:
         plot_objects(w, scene.objects, normals=show_normals)
     plot_camera(w, scene.eye)
-    # plot_rays(w, rays, 40)
+    #plot_rays(w, rays, 40)
     if show_inter:
         intersection_data = [y for x, y in data]
         plot_intersections(w,intersection_data)

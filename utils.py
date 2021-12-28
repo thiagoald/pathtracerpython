@@ -1,6 +1,6 @@
 #!/usr/bin/python3 env
 
-from numba import njit
+from numba import cuda
 from ipdb.__main__ import set_trace
 import numpy as np
 from numba.typed import List
@@ -20,7 +20,7 @@ class NoIntersection(Exception):
     pass
 
 
-ZERO = 1E-5
+ZERO = 1E-10
 
 
 def sample_bary_coords():
@@ -50,7 +50,7 @@ def sample_random_pt(triangle):
     a, b, c = sample_bary_coords()
     return a*np.array(v1) + b*np.array(v2) + c*np.array(v3)
 
-@njit
+@cuda.jit(device=True)
 def squared_dist(pt1, pt2):
     return sum([(c2 - c1)*(c2 - c1) for c2, c1 in zip(pt1, pt2)])
 
@@ -75,74 +75,125 @@ def make_screen_pts(x0, y0, x1, y1, n_pxls_x, n_pxls_y):
     return pts
 
 
-@njit
-def in_triangle(pt, triangle):
-    # check if point is in triangle through cross product between edges AB, BC, AC and segments AP, BP, CP
-    if pt is None:
-        return False
-    v1, v2, v3 = triangle
-    v1 = np.array((v1[0], v1[1], v1[2]))
-    v2 = np.array((v2[0], v2[1], v2[2]))
-    v3 = np.array((v3[0], v3[1], v3[2]))
-    p = np.array((pt[0], pt[1], pt[2]))
-    cross1 = np.cross(v1-v2, p-v2)
-    cross2 = np.cross(v2-v3, p-v3)
-    cross3 = np.cross(v3-v1, p-v1)
+@cuda.jit(device=True)
+def in_triangle(a12, a23, a31, ap2, ap3, ap1):
+    '''checks if point P is in triangle ABC through cross product between edges AB, BC, AC and segments AP, BP, CP'''
     
-    if np.dot(cross1, cross1)<ZERO:
-        return False
-    cross1 = cross1/math.sqrt(np.dot(cross1, cross1))
+    cross2 = cuda.local.array(3, 'float64')
+    cross3 = cuda.local.array(3, 'float64')
+    cross1 = cuda.local.array(3, 'float64')
     
-    if np.dot(cross2, cross2)<ZERO:
-        return False
-    cross2 = cross2/math.sqrt(np.dot(cross3, cross3))
+    cross(a12, ap2, cross2)
+    cross(a23, ap3, cross3)
+    cross(a31, ap1, cross1)
     
-    if np.dot(cross3, cross3)<ZERO:
-        return False
-    cross3 = cross3/math.sqrt(np.dot(cross3, cross3))
-    
-    dot12 = np.dot(cross1, cross2)
-    dot13 = np.dot(cross1, cross3)
-    sign12 = np.sign(dot12)
-    sign13 = np.sign(dot13)
-    return sign12 > 0 and sign13 > 0
+    dot12 = dot(cross1, cross2) #order here does not matter!
+    dot13 = dot(cross1, cross3)
+    return dot12>0 and dot13>0
 
 
 def f(exp):
     return Fore.GREEN + f'{exp:.2f}' + Style.RESET_ALL if abs(exp) > ZERO else Fore.RED + f'{exp:.2f}' + Style.RESET_ALL
 
-@njit
-def intersect(point, vector, triangle):
-    # Vertices
-    v1, v2, v3 = triangle[0], triangle[1], triangle[2]
-    x1, y1, z1 = v1[0], v1[1], v1[2]  # Vertex 1
-    x2, y2, z2 = v2[0], v2[1], v2[2]  # Vertex 2
-    x3, y3, z3 = v3[0], v3[1], v3[2]  # Vertex 3
+@cuda.jit(device=True)
+def cross(a, b,c):
+    c[0] = a[1]*b[2] - a[2]*b[1]
+    c[1] = a[2]*b[0] - a[0]*b[2]
+    c[2] = a[0]*b[1] - a[1]*b[0]
 
-    # Ray point and vector
-    pr, vr = point, vector
-    x_pr, y_pr, z_pr = pr  # Point
-    x_vr, y_vr, z_vr = vr  # Vector
+@cuda.jit(device=True)
+def dot (a, b):
+    return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]
 
-    vr = vr/math.sqrt(np.dot(vr, vr))  # normalize vector of line
-    # get director vector of plane
-    v_plane = np.cross((np.array((x1, y1, z1))-np.array((x2, y2, z2))),
-                       (np.array((x3, y3, z3))-np.array((x2, y2, z2))))
-    v_plane = v_plane/math.sqrt(np.dot(v_plane, v_plane))  # normalize vector of plane
-    # check if they're not collinear (line parallel to plane)
-    dot = np.dot(vr, v_plane)
-    if (abs(dot) > ZERO) and abs(np.dot(v_plane, np.array((x_vr, y_vr, z_vr))))>ZERO:
-        t = (np.dot(v_plane, np.array((x1, y1, z1))) - np.dot(v_plane, np.array((x_pr, y_pr, z_pr)))
-             )/np.dot(v_plane, np.array((x_vr, y_vr, z_vr)))  # calculate intersection parameter
-        P = np.array((x_pr, y_pr, z_pr)) + np.array((x_vr, y_vr, z_vr))*t  # calculate intersection point
+@cuda.jit(device=True)
+def norm(a):
+    n=math.sqrt(dot(a, a))
+    a[0]=a[0]/n
+    a[1]=a[1]/n
+    a[2]=a[2]/n
+
+
+@cuda.jit
+def intersect(data):
     
-        if in_triangle(P, triangle):
-            return P
+    pos = cuda.grid(1)
+    if pos<data.size:
+        a12 = cuda.local.array(3, 'float64') #edge between points 1 and 2
+        a12[0] = data[pos,0,0] - data[pos,1,0]
+        a12[1] = data[pos,0,1] - data[pos,1,1]
+        a12[2] = data[pos,0,2] - data[pos,1,2]
+        
+        a23 = cuda.local.array(3, 'float64') #edge between points 2 and 3
+        a23[0] = data[pos,1,0] - data[pos,2,0]
+        a23[1] = data[pos,1,1] - data[pos,2,1]
+        a23[2] = data[pos,1,2] - data[pos,2,2]
+        
+        a31 = cuda.local.array(3, 'float64') #edge between points 3 and 1
+        a31[0] = data[pos,2,0] - data[pos,0,0]
+        a31[1] = data[pos,2,1] - data[pos,0,1]
+        a31[2] = data[pos,2,2] - data[pos,0,2]
+        
+        v_plane = cuda.local.array(3, 'float64') #the director vector of the plane
+        v_plane[0] = data[pos,0,3]
+        v_plane[1] = data[pos,1,3]
+        v_plane[2] = data[pos,2,3]
+        norm(v_plane)
+        
+        vector_ray = cuda.local.array(3, 'float64') #the ray vector
+        vector_ray[0] = data[pos,0,6]
+        vector_ray[1] = data[pos,1,6]
+        vector_ray[2] = data[pos,2,6]
+        norm(vector_ray)
+        
+        point_ray = cuda.local.array(3, 'float64') #the ray initial point
+        point_ray[0] = data[pos, 0, 5]
+        point_ray[1] = data[pos, 1, 5]
+        point_ray[2] = data[pos, 2, 5]
+        
+        p1 = cuda.local.array(3, 'float64') # a triangle point
+        p1[0] = data[pos,0,0]
+        p1[1] = data[pos,0,1]
+        p1[2] = data[pos,0,2]
+        
+        p_final = cuda.local.array(3, 'float64') # the intersection point
+        
+        if abs(dot(vector_ray, v_plane)) > ZERO:
+            t = (dot(v_plane, p1) - dot(v_plane, point_ray))/dot(vector_ray, v_plane)  # calculate intersection parameter
+            
+            p_final[0]= point_ray[0] + vector_ray[0]*t
+            p_final[1]= point_ray[1] + vector_ray[1]*t
+            p_final[2]= point_ray[2] + vector_ray[2]*t
+            
+            ap2 = cuda.local.array(3, 'float64') #edge between points p_final and 2
+            ap2[0] = p_final[0] - data[pos,1,0]
+            ap2[1] = p_final[1] - data[pos,1,1]
+            ap2[2] = p_final[2] - data[pos,1,2]
+           
+            ap3 = cuda.local.array(3, 'float64') #edge between points p_final and 2
+            ap3[0] = p_final[0] - data[pos,2,0]
+            ap3[1] = p_final[1] - data[pos,2,1]
+            ap3[2] = p_final[2] - data[pos,2,2]
+            
+            ap1 = cuda.local.array(3, 'float64') #edge between points p_final and 2
+            ap1[0] = p_final[0] - data[pos,0,0]
+            ap1[1] = p_final[1] - data[pos,0,1]
+            ap1[2] = p_final[2] - data[pos,0,2]
+            
+            if in_triangle(a12, a23, a31, ap2, ap3, ap1): #in_triangle(a12, a23, a31, ap2, ap3, ap1):
+                data[pos,0,7] = 1
+                data[pos,1,7] = 1
+                data[pos,2,7] = 1
+                data[pos,0,8] = p_final[0]
+                data[pos,1,8] = p_final[1]
+                data[pos,2,8] = p_final[2]
+            else:
+                data[pos,0,7] = -1
+                data[pos,1,7] = -1
+                data[pos,2,7] = -1
         else:
-            return np.array((0.,0.,0.))
-    else:
-        return np.array((0.,0.,0.))
-
+            data[pos,0,7] = -1
+            data[pos,1,7] = -1
+            data[pos,2,7] = -1
 
 def make_image(x1, y1, x2, y2, width, height, intersections):
     mat = np.zeros((height, width, 3), dtype='float64')
