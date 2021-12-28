@@ -28,7 +28,7 @@ def show():
 def plot_scene(scene, rays, data,
                show_normals=False, show_screen=False, show_inter=False):
     w = init()
-    if show_inter:
+    if not show_inter:
         plot_objects(w, scene.objects, normals=show_normals)
     plot_camera(w, scene.eye)
     #plot_rays(w, rays, 40)
