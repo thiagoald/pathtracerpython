@@ -23,7 +23,7 @@ import math
 TAU = 6.28
 ZERO = 1E-5
 
-def compute_shadow_rays(scene, point, normal, n_light_samples=1):
+def compute_shadow_rays(scene, point, normal,obj, n_light_samples=1):
     '''
     Return the color of a point from direct illumination by the light source
     '''
@@ -42,21 +42,8 @@ def compute_shadow_rays(scene, point, normal, n_light_samples=1):
         ray = (point, ray_vector)
         light_squared_distance = squared_dist(point, light_pt)
         done = False
-        for obj in scene.objects:
-            for triangle in obj['geometry'].triangles:
-                try:
-                    pt_3d = intersect(ray, triangle)
-                    inter_squared_distance = squared_dist(pt_3d, point)
-                    if inter_squared_distance < ZERO: #intersection point is the point itself
-                        continue
-                    if pt_3d is not None and inter_squared_distance < light_squared_distance:
-                        done = True
-                        break
-                except NoIntersection:
-                    pass
-            if done:
-                break
-        if done:
+        _, _, _, isItLight = intersect_objects(ray, scene.objects, scene.light_obj)
+        if not isItLight:
           shadow_vectors.append(None)
         else:
           shadow_vectors.append(ray_vector)
@@ -106,20 +93,10 @@ def intersection_helper(point, vector, objs_data_triangles, objs_data_normals):
     intersections.pop(0)
     return intersections
 
-
-def intersect_objects(ray, objects, light_obj):
-    '''Return intersection point, triangle normal and object'''
-    # this is actually important because, when ray is none, we still have to
-    # count it so results align
-    # (otherwise we'd skip it and mix up different pixel's paths)
-    if ray is None:
-        return None
-    # adds light to object list
-    myObjects = objects + [{'geometry': light_obj}]
-    # returns nearest intersecting object
+def organize_objs_data(objects):
     objs_data_triangles=List()
     objs_data_normals=List()
-    for obj in myObjects:
+    for obj in objects:
         obj_triangles=List()
         obj_normals=List()
         for triangle in obj['geometry'].triangles:
@@ -134,6 +111,19 @@ def intersect_objects(ray, objects, light_obj):
             obj_normals.append(np.array(normal))
         objs_data_triangles.append(obj_triangles)
         objs_data_normals.append (obj_normals)
+    return objs_data_triangles, objs_data_normals
+
+def intersect_objects(ray, objects, light_obj):
+    '''Return intersection point, triangle normal and object'''
+    # this is actually important because, when ray is none, we still have to
+    # count it so results align
+    # (otherwise we'd skip it and mix up different pixel's paths)
+    if ray is None:
+        return None
+    # adds light to object list
+    myObjects = objects + [{'geometry': light_obj}]
+    # returns nearest intersecting object
+    objs_data_triangles, objs_data_normals = organize_objs_data(myObjects)
     ray_point, ray_vector = ray
     intersections = intersection_helper(np.array(ray_point), np.array(ray_vector), objs_data_triangles, objs_data_normals)
     intersections = [ (sq[0],pt_3d,pt_screen,normal,int(index[0])) for [sq,pt_3d,pt_screen,normal,index] in intersections]
@@ -177,8 +167,8 @@ def setup():
 
 def compute_color(scene, obj, point, normal):
     amb = compute_ambient_color(scene, obj)
-    #sha = compute_shadow_rays(scene, point, normal)
-    return ( amb )
+    sha = compute_shadow_rays(scene, point, normal, obj)
+    return ( amb + sha)
 
 def rotate(axis, angle, v):
     """
