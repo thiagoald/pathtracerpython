@@ -90,7 +90,7 @@ def plot_screen(widget, x0, y0, x1, y1, n_pxls_x, n_pxls_y, list_of_2d_colors):
 
 
 def plot_rays(widget, rays, t, color=WHITE_TRANSLUCENT):
-    for pt, vector in rays:
+    for pt, vector,_ in rays:
         widget.addItem(gl.GLLinePlotItem(
             pos=np.array([pt, pt + t*vector]), color=color, glOptions='translucent'))
 
