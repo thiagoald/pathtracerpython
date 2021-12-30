@@ -294,29 +294,27 @@ def main():
                     if not isItLight:
                         ray_type_randomness = uniform(0, obj['kd']+obj['ks'])
                         if ray_type_randomness <= obj['kd']:  # Case 1: diffuse
+                            
                             phi = np.arccos(math.sqrt(uniform(0, 1)))
+                            phi=phi/2
                             theta = TAU*uniform(0, 1)
-                            ray_vector = np.array((np.sin(phi)*np.cos(theta),
-                                                   np.sin(phi)*np.sin(theta),
-                                                   np.cos(phi)))
+                            ray_vector = np.array((np.sin(phi)*np.sin(theta),
+                                                   np.cos(phi),
+                                                   np.sin(phi)*np.cos(theta)))
                             ray_vector = ray_vector/np.linalg.norm(ray_vector)
                             local_axis = np.cross(np.array((0, 1, 0)), normal)
                             ray_vector = rotate(local_axis, np.arccos(np.dot(np.array((0,1,0)), normal)), ray_vector)
                             rays.append((point, ray_vector, i_ray))
-                            accumulated_k[i_ray] *= obj['kd'] * \
-                                np.dot(ray_vector, normal)
-                        else:
-                            _, old_ray_vector, _ = old_rays[i_ray]  #Case 2: specular
-                            ray_vector = np.dot(normal, old_ray_vector)*2*normal - old_ray_vector
+                            accumulated_k[i_ray] *= obj['kd'] * np.dot(ray_vector, normal)
+                            
+                        else: # Case 2: specular
+                            _, old_ray_vector, _ = old_rays[i_ray]  
+                            local_axis = np.cross(old_ray_vector,normal)
+                            ray_vector = rotate(local_axis, 2*np.arccos(np.dot(old_ray_vector, normal)),old_ray_vector)
+                            #ray_vector = np.dot(normal, old_ray_vector)*2*normal - old_ray_vector
                             ray_vector = ray_vector/np.linalg.norm(ray_vector)
-                            eye_vector = scene.eye - point
-                            eye_vector = eye_vector/np.linalg.norm(eye_vector)
-                            local_axis = np.cross(np.array((0, 1, 0)), normal)
-                            ray_vector = rotate(local_axis, np.arccos(np.dot(np.array((0,1,0)), normal)), ray_vector)
                             rays.append((point, ray_vector, i_ray))
-                            accumulated_k[i_ray] *= obj['ks'] * \
-                                ((np.dot(eye_vector, ray_vector))**obj['n'])
-                                
+                            accumulated_k[i_ray] *= obj['ks']
         for i, intersec in enumerate(colored_intersections):
             pixel_color, list_of_3d_points_and_colors = intersec
             pixel_color_list[i]+=pixel_color
