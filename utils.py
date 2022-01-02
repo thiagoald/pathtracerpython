@@ -159,3 +159,32 @@ def make_image(x1, y1, x2, y2, width, height, intersections):
     mat = mat / np.max(mat)
     mat *= 255
     return Image.fromarray(mat.astype('uint8'))
+
+
+def bbox_to_triangles(bbox):
+    triangles = []
+    (x0, y0, z0), (x1, y1, z1) = bbox
+    pt0 = np.array((x0, y0, z0))
+    pt1 = np.array((x1, y1, z1))
+    dx, dy, dz = (np.array([(x1 - x0), 0, 0]),
+                  np.array([0, (y1 - y0), 0]),
+                  np.array([0, 0, (z1 - z0)]))
+    # x_min
+    triangles.extend([[pt0, (pt0 + dy), (pt0 + dy + dz)],
+                      [pt0, (pt0 + dz), (pt0 + dy + dz)]])
+    # x_max
+    triangles.extend([[pt1, (pt1 - dy), (pt1 - dy - dz)],
+                      [pt1, (pt1 - dz), (pt1 - dy - dz)]])
+    # y_min
+    triangles.extend([[pt0, (pt0 + dx), (pt0 + dx + dz)],
+                      [pt0, (pt0 + dz), (pt0 + dx + dz)]])
+    # y_max
+    triangles.extend([[pt1, (pt1 - dx), (pt1 - dx - dz)],
+                      [pt1, (pt1 - dz), (pt1 - dx - dz)]])
+    # z_min
+    triangles.extend([[pt0, (pt0 + dy), (pt0 + dy + dx)],
+                      [pt0, (pt0 + dx), (pt0 + dy + dx)]])
+    # z_max
+    triangles.extend([[pt1, (pt1 - dy), (pt1 - dy - dx)],
+                      [pt1, (pt1 - dx), (pt1 - dy - dx)]])
+    return triangles
