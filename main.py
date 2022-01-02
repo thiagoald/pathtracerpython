@@ -314,8 +314,6 @@ def main():
                             
                         else: # Case 2: specular
                             isItDiffuse[i_ray]=False
-                            
-                            rays.append((point, ray_vector, i_ray))
                             accumulated_k[i_ray] *= obj['ks'] * (specular_dot)**obj['n']
                             
             # compute colors

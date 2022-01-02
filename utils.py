@@ -141,31 +141,34 @@ def intersect_one_triangle(one_triangle, v_plane, point_ray, vector_ray, out):
     if abs(dot(vector_ray, v_plane)) > ZERO:
         t = (dot(v_plane, p1) - dot(v_plane, point_ray))/dot(vector_ray, v_plane)  # calculate intersection parameter
         
-        p_final[0]= point_ray[0] + vector_ray[0]*t
-        p_final[1]= point_ray[1] + vector_ray[1]*t
-        p_final[2]= point_ray[2] + vector_ray[2]*t
-        
-        ap2 = cuda.local.array(3, 'float64') #edge between points p_final and 2
-        ap2[0] = p_final[0] - one_triangle[1,0]
-        ap2[1] = p_final[1] - one_triangle[1,1]
-        ap2[2] = p_final[2] - one_triangle[1,2]
-       
-        ap3 = cuda.local.array(3, 'float64') #edge between points p_final and 2
-        ap3[0] = p_final[0] - one_triangle[2,0]
-        ap3[1] = p_final[1] - one_triangle[2,1]
-        ap3[2] = p_final[2] - one_triangle[2,2]
-        
-        ap1 = cuda.local.array(3, 'float64') #edge between points p_final and 2
-        ap1[0] = p_final[0] - one_triangle[0,0]
-        ap1[1] = p_final[1] - one_triangle[0,1]
-        ap1[2] = p_final[2] - one_triangle[0,2]
-        
-        if in_triangle(a12, a23, a31, ap2, ap3, ap1): #in_triangle(a12, a23, a31, ap2, ap3, ap1):
-            out[0] = p_final[0]
-            out[1] = p_final[1]
-            out[2] = p_final[2]
-            out[3] = sq_distance(p_final, point_ray)
-            out[4] = 1
+        if t>=0:
+            p_final[0]= point_ray[0] + vector_ray[0]*t
+            p_final[1]= point_ray[1] + vector_ray[1]*t
+            p_final[2]= point_ray[2] + vector_ray[2]*t
+            
+            ap2 = cuda.local.array(3, 'float64') #edge between points p_final and 2
+            ap2[0] = p_final[0] - one_triangle[1,0]
+            ap2[1] = p_final[1] - one_triangle[1,1]
+            ap2[2] = p_final[2] - one_triangle[1,2]
+           
+            ap3 = cuda.local.array(3, 'float64') #edge between points p_final and 2
+            ap3[0] = p_final[0] - one_triangle[2,0]
+            ap3[1] = p_final[1] - one_triangle[2,1]
+            ap3[2] = p_final[2] - one_triangle[2,2]
+            
+            ap1 = cuda.local.array(3, 'float64') #edge between points p_final and 2
+            ap1[0] = p_final[0] - one_triangle[0,0]
+            ap1[1] = p_final[1] - one_triangle[0,1]
+            ap1[2] = p_final[2] - one_triangle[0,2]
+            
+            if in_triangle(a12, a23, a31, ap2, ap3, ap1): #in_triangle(a12, a23, a31, ap2, ap3, ap1):
+                out[0] = p_final[0]
+                out[1] = p_final[1]
+                out[2] = p_final[2]
+                out[3] = sq_distance(p_final, point_ray)
+                out[4] = 1
+            else:
+                out[4]=-1
         else:
             out[4]=-1
     else:
@@ -253,6 +256,7 @@ def make_image(x1, y1, x2, y2, width, height, intersections):
         counter+=1
     mat = mat - np.min(mat)
     mat = mat / np.max(mat)
+    mat = mat/ (mat+np.array((.5, .5, .5)))
     mat *= 255
     return Image.fromarray(mat.astype('uint8'))
 

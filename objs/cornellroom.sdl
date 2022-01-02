@@ -9,10 +9,10 @@ eye 0.0 0.0 5.7
 size 200 200
 ortho -1 -1 1 1
 background 0.0 0.0 0.0
-ambient 0.2
+ambient 0.6
 
 # Luz branca retangulo no centro do teto
-light luzcornell.obj 0.8 0.7 1.0
+light luzcornell.obj 0.8 0.5 1
 
 npaths 10
 tonemapping 1.0
@@ -28,7 +28,7 @@ seed 9
 #object <name.obj> red green blue ka kd ks kt n
 
 # left wall RED
-object leftwall.obj 1.0 0.0 0.0 0.3 0.7 0 0 5
+object leftwall.obj 1.0 0.0 0.0 0.3 0.7 0 0 20
 
 # right wall GREEN
 object rightwall.obj 0.0 1.0 0.0 0.3 0.7 0 0 5
@@ -37,7 +37,7 @@ object rightwall.obj 0.0 1.0 0.0 0.3 0.7 0 0 5
 object floor.obj 1.0 1.0 1.0 0.3 0.7 0 0 30
 
 # back wall WHITE
-object back.obj 1.0 1.0 1.0 0.3 0.5 0.8 0 15
+object back.obj 1.0 1.0 1.0 0.3 0.5 0.8 0 50
 
 # ceiling WHITE
 object ceiling.obj 1.0 1.0 1.0 0.3 0.7 0 0 5
