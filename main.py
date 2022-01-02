@@ -239,7 +239,7 @@ def main():
     # initialization
     colored_intersections=[]
     for _ in range(scene.width*scene.height):
-        initial_color = np.array((0, 0, 0))
+        initial_color = np.array((0., 0., 0.))
         initial_list_of_3d_points_and_colors = [
             (np.array((0, 0, 0)), np.array((0, 0, 0)),)]
         colored_intersections.append(
@@ -269,12 +269,35 @@ def main():
                 _,_, index = ray
                 old_rays[index] = ray
             rays = []
-            isItDiffuse=np.ones(scene.width*scene.height)
-            for result in results:
+            isItDiffuse=[True] * (scene.width*scene.height)
+            for result in tqdm(results):
                 if result is not None:
+                    
                     i_ray, point, normal, obj, isItLight = result
+                    
                     if not isItLight:
+                    
+                        #Check if specular dot product is positive
+                        areas = scene.light_obj.areas
+                        i = pick_random_triangle(areas)
+                        light_tri = scene.light_obj.triangles[i]
+                        # Random point in the light source
+                        light_pt = sample_random_pt(light_tri)
+                        light_pt = (np.array(light_tri[0]) + np.array(light_tri[1]) + np.array(light_tri[2]))/3
+                        light_vector = light_pt - point
+                        light_vector = light_vector/np.linalg.norm(light_vector)
+                        
+                        reflected_ray_vector=2*np.dot(light_vector, normal)*normal - light_vector
+                        reflected_ray_vector = reflected_ray_vector/np.linalg.norm(reflected_ray_vector)
+                        
+                        eye_vector = scene.eye - point
+                        eye_vector = eye_vector/np.linalg.norm(eye_vector)
+                        specular_dot = np.dot(reflected_ray_vector, eye_vector)
+                        if specular_dot<0:
+                            specular_dot=0
+                        
                         ray_type_randomness = uniform(0, obj['kd']+obj['ks'])
+                        
                         if ray_type_randomness <= obj['kd']:  # Case 1: diffuse
                             isItDiffuse[i_ray]=True
                             phi = np.arccos(math.sqrt(uniform(0, 1)))
@@ -291,13 +314,9 @@ def main():
                             
                         else: # Case 2: specular
                             isItDiffuse[i_ray]=False
-                            _, old_ray_vector, _ = old_rays[i_ray]  
-                            local_axis = np.cross(old_ray_vector,normal)
-                            old_ray_vector = old_ray_vector/np.linalg.norm(old_ray_vector)
-                            ray_vector = rotate(local_axis, 2*np.arccos(np.dot(old_ray_vector, normal)),old_ray_vector)
-                            ray_vector = ray_vector/np.linalg.norm(ray_vector)
+                            
                             rays.append((point, ray_vector, i_ray))
-                            accumulated_k[i_ray] *= obj['ks']
+                            accumulated_k[i_ray] *= obj['ks'] * (specular_dot)**obj['n']
                             
             # compute colors
             new_colors = []
@@ -317,8 +336,13 @@ def main():
             new_color_data = compute_color(scene, objs, points, normals, AreTheyLight, i_rays)
             for new_color, i_ray, point in new_color_data:
                 old_color, _ = colored_intersections[i_ray]
-                colored_intersections[i_ray] = (old_color+new_color*accumulated_k[i_ray]*int(isItDiffuse[i_ray]), [(point, new_color,)])
-                
+                if isItDiffuse[i_ray]:
+                    colored_intersections[i_ray] = (old_color+new_color*accumulated_k[i_ray], [(point, new_color,)])
+                else:
+                    new_color = np.array(scene.light_color)
+                    colored_intersections[i_ray] = (old_color+new_color*accumulated_k[i_ray], [(point, new_color,)])
+                    
+                    
         for i, intersec in enumerate(colored_intersections):
             pixel_color, list_of_3d_points_and_colors = intersec
             pixel_color_list[i]+=pixel_color

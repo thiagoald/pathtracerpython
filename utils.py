@@ -60,7 +60,7 @@ def make_rays(start_pt, pts):
     rays = []
     for i, pt in enumerate(pts):
         v = np.array(pt)-np.array(start_pt)
-        # v = v/np.linalg.norm(v)
+        v = v/np.linalg.norm(v)
         rays.append((start_pt, v, i))
     return rays
 
@@ -242,7 +242,7 @@ def intersect(objs_data, ray_data, out_data):
     out_data[pos_ray,7] = inter_data[special_index, 4] #found flag
     out_data[pos_ray,8] = ray_index #ray index
     
-    
+
 def make_image(x1, y1, x2, y2, width, height, intersections):
     mat = np.zeros((height, width, 3), dtype='float64')
     counter =0 
@@ -255,3 +255,4 @@ def make_image(x1, y1, x2, y2, width, height, intersections):
     mat = mat / np.max(mat)
     mat *= 255
     return Image.fromarray(mat.astype('uint8'))
+
