@@ -252,11 +252,12 @@ def make_image(x1, y1, x2, y2, width, height, intersections):
     for color, _ in intersections:
         i=counter//width
         j = counter%width
-        mat[height-1-j, i] = np.array(color)
+        if color[0]>=0 and color[1]>=0 and color[2]>=0: # WHY ARE THERE NEGATIVE COLORS?
+            mat[height-1-j, i] = np.array(color)
+        else:
+            print('debug neg color')
         counter+=1
-    mat = mat - np.min(mat)
-    mat = mat / np.max(mat)
-    mat = mat/ (mat+np.array((.4, .4, .4)))
+    mat = mat/ (mat+np.array((.5, .5, .5)))
     mat *= 255
     return Image.fromarray(mat.astype('uint8'))
 

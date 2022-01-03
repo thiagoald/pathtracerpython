@@ -162,10 +162,10 @@ def intersect_objects(rays, objects, light_obj):
     
     ray_data = organize_ray_data(rays)
     d_ray_data = cuda.to_device(ray_data)
-    d_out_data = cuda.device_array((len(rays),9), dtype='float64') #7 for the 3 positional point values + 3 normal vector values 1 object index + 1 found flag + 1 ray index
+    d_out_data = cuda.device_array((len(rays),9), dtype='float64') #9 for the 3 positional point values + 3 normal vector values 1 object index + 1 found flag + 1 ray index
     threadsperblock = 32
     blockspergrid = (d_ray_data.size +threadsperblock-1)
-    intersections = intersect[blockspergrid,threadsperblock](d_obj_data, d_ray_data, d_out_data)
+    intersect[blockspergrid,threadsperblock](d_obj_data, d_ray_data, d_out_data)
     out_data = d_out_data.copy_to_host()
     
     intersections = unpack_ray_data(out_data)
@@ -296,26 +296,9 @@ def main():
                     
                     if not isItLight:
                     
-                        #Check if specular dot product is positive
-                        areas = scene.light_obj.areas
-                        i = pick_random_triangle(areas)
-                        light_tri = scene.light_obj.triangles[i]
-                        # Random point in the light source
-                        light_pt = sample_random_pt(light_tri)
-                        light_pt = (np.array(light_tri[0]) + np.array(light_tri[1]) + np.array(light_tri[2]))/3
-                        light_vector = light_pt - point
-                        light_vector = light_vector/np.linalg.norm(light_vector)
                         
-                        reflected_ray_vector=2*np.dot(light_vector, normal)*normal - light_vector
-                        reflected_ray_vector = reflected_ray_vector/np.linalg.norm(reflected_ray_vector)
                         
-                        eye_vector = scene.eye - point
-                        eye_vector = eye_vector/np.linalg.norm(eye_vector)
-                        specular_dot = np.dot(reflected_ray_vector, eye_vector)
-                        if specular_dot<0:
-                            specular_dot=0
-                        
-                        ray_type_randomness = uniform(0, obj['kd']+obj['ks']+obj['kt'])
+                        ray_type_randomness = uniform(0, obj['kd']+obj['ks']+obj['kt']) # toss the coin
                         
                         if ray_type_randomness <= obj['kd']:  # Case 1: diffuse
                             isItDiffuse[i_ray]=True
@@ -331,12 +314,34 @@ def main():
                             local_axis = np.cross(np.array((0, 1, 0)), normal)
                             ray_vector = rotate(local_axis, np.arccos(np.dot(np.array((0,1,0)), normal)), ray_vector)
                             rays.append((point, ray_vector, i_ray))
-                            accumulated_k[i_ray] *= obj['kd'] * np.dot(ray_vector, normal)
+                            accumulated_k[i_ray] *= obj['kd'] * abs(np.dot(ray_vector, normal))
                             
                         elif ray_type_randomness<=obj['kd']+obj['ks']: # Case 2: specular
                             isItDiffuse[i_ray]=False
                             isItSpecular[i_ray]=True
+                            
+                            # Random point in the light source
+                            areas = scene.light_obj.areas
+                            i = pick_random_triangle(areas)
+                            light_tri = scene.light_obj.triangles[i]
+                            light_pt = sample_random_pt(light_tri)
+                            light_pt = (np.array(light_tri[0]) + np.array(light_tri[1]) + np.array(light_tri[2]))/3
+                            light_vector = light_pt - point
+                            light_vector = light_vector/np.linalg.norm(light_vector)
+                            
+                            reflected_ray_vector=2*np.dot(light_vector, normal)*normal - light_vector
+                            reflected_ray_vector = reflected_ray_vector/np.linalg.norm(reflected_ray_vector)
+                            
+                            eye_vector = scene.eye - point
+                            eye_vector = eye_vector/np.linalg.norm(eye_vector)
+                            
+                            specular_dot = np.dot(reflected_ray_vector, eye_vector)
+                            if specular_dot<0:
+                                specular_dot=0
+                                
+                            
                             accumulated_k[i_ray] *= obj['ks'] * (specular_dot)**obj['n']
+                            
                         else: # Case 3: transmitted
                             isItDiffuse[i_ray]=False
                             isItSpecular[i_ray]=False
@@ -364,15 +369,10 @@ def main():
                                         else:
                                             adjusted_new_normal = new_normal
                                         total_reflection_ray_vector=2*np.dot(new_ray_vector, adjusted_new_normal)*adjusted_new_normal - new_ray_vector
-                                        if np.dot(new_ray_vector, adjusted_new_normal) != np.dot(total_reflection_ray_vector, adjusted_new_normal):
-                                            print ("BUG! total reflection outgoing ray is miscalculated")
-                                            exit()
-                                        ray = (new_point, total_reflection_ray_vector, i_ray)
-                                else:
-                                    isItDiffuse[i_ray]=True #use the object's normal color
-                                    accumulated_k[i_ray]*=1.4 #shine?
+                                        ray = (new_point, total_reflection_ray_vector, i_ray)                                
                             if total_reflection_counter==0:  #reflected internally too many times
                                 isItDiffuse[i_ray]=True #use the object's normal color
+                                accumulated_k[i_ray]*=4
                         
             # compute colors
             new_colors = []
