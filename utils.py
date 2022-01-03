@@ -245,6 +245,59 @@ def intersect(objs_data, ray_data, out_data):
     out_data[pos_ray,7] = inter_data[special_index, 4] #found flag
     out_data[pos_ray,8] = ray_index #ray index
     
+def cpu_intersect(ray, triangle):
+    # Vertices
+    v1, v2, v3 = triangle
+    x1, y1, z1 = v1  # Vertex 1
+    x2, y2, z2 = v2  # Vertex 2
+    x3, y3, z3 = v3  # Vertex 3
+
+    # Ray point and vector
+    pr, vr, _ = ray
+    x_pr, y_pr, z_pr = pr  # Point
+    x_vr, y_vr, z_vr = vr  # Vector
+
+    vr = vr/np.linalg.norm(vr)  # normalize vector of line
+    # get director vector of plane
+    v_plane = np.cross((np.array(v1)-np.array(v2)),
+                       (np.array(v3)-np.array(v2)))
+    v_plane = v_plane/np.linalg.norm(v_plane)  # normalize vector of plane
+    # check if they're not collinear (line parallel to plane)
+    dot = np.dot(vr, v_plane)
+    if (abs(dot) > ZERO):
+        t = (np.dot(v_plane, np.array(v1)) - np.dot(v_plane, np.array(pr))
+             )/np.dot(v_plane, vr)  # calculate intersection parameter
+        P = np.array(pr) + vr*t  # calculate intersection point
+    else:
+        P = None  # in collinear case, there's no intersection point
+
+    if cpu_in_triangle(P, triangle):
+        return P
+
+    else:
+        raise NoIntersection
+
+def cpu_in_triangle(pt, triangle):
+    # check if point is in triangle through cross product between edges AB, BC, AC and segments AP, BP, CP
+    if pt is None:
+        return False
+    v1, v2, v3 = triangle
+    v1 = np.array(v1)
+    v2 = np.array(v2)
+    v3 = np.array(v3)
+    p = np.array(pt)
+    cross1 = np.cross(v1-v2, p-v2)
+    cross2 = np.cross(v2-v3, p-v3)
+    cross3 = np.cross(v3-v1, p-v1)
+    cross1 = cross1/np.linalg.norm(cross1)
+    cross2 = cross2/np.linalg.norm(cross2)
+    cross3 = cross3/np.linalg.norm(cross3)
+    dot12 = np.dot(cross1, cross2)
+    dot13 = np.dot(cross1, cross3)
+    sign12 = np.sign(dot12)
+    sign13 = np.sign(dot13)
+    return sign12 > 0 and sign13 > 0
+
 
 def make_image(x1, y1, x2, y2, width, height, intersections):
     mat = np.zeros((height, width, 3), dtype='float64')

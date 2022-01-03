@@ -2,7 +2,7 @@
 
 from multiprocessing import Value
 import numpy as np
-from utils import NoIntersection, intersect, bbox_to_triangles
+from utils import NoIntersection, cpu_intersect, bbox_to_triangles
 
 
 def lerp(pt1, pt2, t):
@@ -143,7 +143,7 @@ class BezierSurface:
         intersections = []
         for tri in triangles:
             try:
-                intersections.append(intersect(ray, tri))
+                intersections.append(cpu_intersect(ray, tri))
             except NoIntersection:
                 pass
         if len(intersections) == 0:

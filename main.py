@@ -117,14 +117,14 @@ def organize_objs_data(objects):
     return np_all_data
 
 def unpack_ray_data(data):
-    results = []
+    results = {}
     for datum in data:
         if datum[7] > 0: # found flag
             pt_3d = np.array((datum[0], datum[1], datum[2]))
             normal = np.array((datum[3], datum[4], datum[5]))
             obj_index = int(datum[6])
             ray_index = int (datum[8])
-            results.append([pt_3d, normal, obj_index, ray_index])
+            results[ray_index]=(pt_3d, normal, obj_index)
     return results
     
 def refract(refraction_ratio, normal, incoming_ray):
@@ -149,15 +149,11 @@ def organize_ray_data(rays):
 
 def intersect_objects(rays, objects, light_obj):
     '''Return ray index, intersection point, triangle normal, object and whether object is the light source'''
-    '''
-    if "d_obj_data" not in intersect_objects.__dict__:
-        intersect_objects.myObjects = objects + [{'geometry': light_obj}]
-        obj_data = organize_objs_data(intersect_objects.myObjects)
-        intersect_objects.d_obj_data = cuda.to_device(obj_data)
-    ''' 
     
-    myObjects = objects + [{'geometry': light_obj}]
-    obj_data = organize_objs_data(myObjects)
+    gpu_objects = [o for o in objects if type(o['geometry']) is not BezierSurface]
+    bezier_objects = [o for o in objects if type(o['geometry']) is BezierSurface]
+    gpu_objects = gpu_objects + [{'geometry': light_obj}]
+    obj_data = organize_objs_data(gpu_objects)
     d_obj_data = cuda.to_device(obj_data)
     
     ray_data = organize_ray_data(rays)
@@ -168,17 +164,55 @@ def intersect_objects(rays, objects, light_obj):
     intersect[blockspergrid,threadsperblock](d_obj_data, d_ray_data, d_out_data)
     out_data = d_out_data.copy_to_host()
     
-    intersections = unpack_ray_data(out_data)
+    gpu_closest_intersections = unpack_ray_data(out_data)
+    
+    bezier_closest_intersections={}
+    for ray in rays:
+        bezier_intersections = []
+        ray_point, _, ray_index = ray
+        for one_bezier in bezier_objects:
+            surface = one_bezier['geometry']
+            try:
+                bezier_point, bezier_normal = surface.intersect(ray)
+                bezier_intersections.append((bezier_point, bezier_normal, one_bezier, np.linalg.norm(bezier_point-ray_point)))
+            except NoIntersection:
+                pass
+        if len (bezier_intersections)>0:
+            p, n, obj, _ = min(bezier_intersections, key= lambda inter: inter[-1])
+            bezier_closest_intersections[ray_index]=(p, n, obj)
+    
     results=[]
-    if len(intersections)==0:
-        return None
-    for one_inter in intersections:
-        obj = myObjects[one_inter[2]]
-        if obj['geometry'] == light_obj:
-            isItLight = True
+    
+    for ray in rays:
+        ray_point, _, ray_index = ray
+        try:
+            b_point, b_normal, b_obj = bezier_closest_intersections[ray_index]
+        except KeyError:
+            try:
+                g_point, g_normal, g_obj_index = gpu_closest_intersections[ray_index]
+                g_obj = gpu_objects[g_obj_index]
+            except KeyError:
+                continue
+            if g_obj['geometry'] == light_obj:
+                isItLight = True
+            else:
+                isItLight = False
+            results.append([ray_index, g_point, g_normal, g_obj, isItLight])
+            continue
+        try:
+            g_point, g_normal, g_obj_index = gpu_closest_intersections[ray_index]
+            g_obj = gpu_objects[g_obj_index]
+        except KeyError:
+                results.append([ray_index, b_point, b_normal, b_obj, False])
+                continue
+        if np.linalg.norm(ray_point-g_point)>np.linalg.norm(ray_point-b_point):
+            results.append([ray_index, b_point, b_normal, b_obj, False])
         else:
-            isItLight = False
-        results.append([one_inter[3], one_inter[0], one_inter[1], obj, isItLight])
+            if g_obj['geometry'] == light_obj:
+                isItLight = True
+            else:
+                isItLight = False
+            results.append([ray_index, g_point, g_normal, g_obj, isItLight])
     return results
 
 def setup():
