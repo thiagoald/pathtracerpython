@@ -1,6 +1,8 @@
 from os.path import dirname, join
+from bezier import BezierSurface
 from vector import V, cross_prod, dist, triangle_area, normalize
-
+import pickle
+import json
 
 def calc_normal(tri):
     normal = normalize(cross_prod(tri[1] - tri[0],
@@ -168,10 +170,16 @@ class Scene():
                     self.tonemapping = float(tokens[1])
                 elif tokens[0] == 'seed':
                     self.seed = int(tokens[1])
-                elif tokens[0] == 'object':
+                elif tokens[0] in ['object', 'bezier']:
                     object_dict = {}
-                    object_dict['geometry'] = Obj(
-                        join(dirname(path), tokens[1]))
+                    if tokens[0] == 'object':
+                        object_dict['geometry'] = Obj(
+                            join(dirname(path), tokens[1]))
+                    else:
+                        surface = json.load(
+                            open(join(dirname(path), tokens[1])))
+                        surface = BezierSurface(surface['points'])
+                        object_dict['geometry'] = surface
                     object_dict['red'] = float(tokens[2])
                     object_dict['green'] = float(tokens[3])
                     object_dict['blue'] = float(tokens[4])

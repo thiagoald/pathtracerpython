@@ -19,6 +19,7 @@ import numpy as np
 import argparse
 from random import uniform
 import math
+from bezier import BezierSurface
 
 TAU = 6.28
 ZERO = 1E-5
@@ -70,7 +71,6 @@ def compute_shadow_rays(scene, points, normals,objs, n_light_samples=1):
     colors/=n_light_samples
     
     return colors
-
 
 def compute_ambient_color(scene, objs):
     color_arrays=[]
@@ -198,6 +198,7 @@ def setup():
     return args
 
 
+
 def compute_color(scene, objs, points, normals, AreTheyLight, i_rays):
     new_colors=[]
     new_objs=[]
@@ -232,10 +233,12 @@ def rotate(axis, angle, v):
     b, c, d = -axis * math.sin(angle / 2.0)
     aa, bb, cc, dd = a * a, b * b, c * c, d * d
     bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
-    rotation_matrix = np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
-                     [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
-                     [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
+    rotation_matrix = np.array(
+        [[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
+         [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
+         [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
     return np.dot(rotation_matrix, v)
+
 
 def main():
     args = setup()
@@ -244,12 +247,12 @@ def main():
         *scene.ortho, scene.width, scene.height)
     print(f'Number of objects: {len(scene.objects)}')
     print(
-        f'Number of triangles: {sum([len(o["geometry"].triangles) for o in scene.objects])}')
+        f'Number of triangles: {sum([len(o["geometry"].triangles) for o in scene.objects if type(o["geometry"]) is not BezierSurface])}')
     results = []
     how_many_rays = args.n_rays
-    how_many_bounces = args.n_bounces    
+    how_many_bounces = args.n_bounces
     # initialization
-    colored_intersections=[]
+    colored_intersections = []
     for _ in range(scene.width*scene.height):
         initial_color = np.array((0., 0., 0.))
         initial_list_of_3d_points_and_colors = [
@@ -260,12 +263,14 @@ def main():
     pixel_color_list=[0]*(scene.width*scene.height)
     for rays_counter in tqdm(range(how_many_rays)):
         print('rays_counter is ' + str(rays_counter))
-        colored_intersections = [(initial_color, initial_list_of_3d_points_and_colors) for intersec in colored_intersections]
+        colored_intersections = [(initial_color, initial_list_of_3d_points_and_colors)
+                                 for intersec in colored_intersections]
         accumulated_k = np.ones(scene.width*scene.height)
         rays = make_rays(scene.eye, screen_pts)
         for bounces_counter in range(how_many_bounces):
             print('bounces_counter is ' + str(bounces_counter))
             # compute intersections
+
             print('intersecting...')  
             results=[]
             gpu_limit = math.ceil(len(rays)/MAX_RAYS_AT_ONCE)
@@ -322,6 +327,7 @@ def main():
                                                    np.cos(phi),
                                                    np.sin(phi)*np.cos(theta)))
                             ray_vector = ray_vector/np.linalg.norm(ray_vector)
+
                             local_axis = np.cross(np.array((0, 1, 0)), normal)
                             ray_vector = rotate(local_axis, np.arccos(np.dot(np.array((0,1,0)), normal)), ray_vector)
                             rays.append((point, ray_vector, i_ray))
@@ -398,10 +404,9 @@ def main():
                 else: # then it's transmitted
                     colored_intersections[i_ray] = (old_color, [(point, new_color,)])
                     
-                    
         for i, intersec in enumerate(colored_intersections):
             pixel_color, list_of_3d_points_and_colors = intersec
-            pixel_color_list[i]+=pixel_color
+            pixel_color_list[i] += pixel_color
 
     # Here we average the rays
     temp_intersections = []
