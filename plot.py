@@ -34,7 +34,6 @@ def plot_scene(scene, rays, data,
     if not show_inter:
         plot_objects(w, scene.objects, normals=show_normals)
     plot_camera(w, scene.eye)
-    # plot_rays(w, rays, 40)
     if show_inter:
         intersection_data = [y for x, y in data]
         plot_intersections(w, intersection_data)
@@ -97,7 +96,7 @@ def plot_screen(widget, x0, y0, x1, y1, n_pxls_x, n_pxls_y, list_of_2d_colors):
 
 
 def plot_rays(widget, rays, t, color=WHITE_TRANSLUCENT):
-    for pt, vector in rays:
+    for pt, vector,_ in rays:
         widget.addItem(gl.GLLinePlotItem(
             pos=np.array([pt, pt + t*vector]), color=color, glOptions='translucent'))
 
