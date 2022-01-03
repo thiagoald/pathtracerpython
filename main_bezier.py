@@ -2,9 +2,9 @@
 
 from bezier import BezierCurve, BezierSurface
 import numpy as np
-from plot import (init, plot_pts_normals, show, plot_curve, plot_intersections,
-                  plot_surface,
+from plot import (init, plot_pts_normals, show, plot_curve, plot_surface,
                   RED_OPAQUE, BLUE_OPAQUE, WHITE_OPAQUE, GREEN_OPAQUE)
+from plot import plot_intersections_surface as plot_intersections
 from utils import NoIntersection
 
 

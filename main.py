@@ -15,6 +15,7 @@ import numpy as np
 import argparse
 from random import uniform
 import math
+from bezier import BezierSurface
 
 TAU = 6.28
 ZERO = 1E-5
@@ -40,9 +41,10 @@ def compute_shadow_rays(scene, point, normal, n_light_samples=3):
         light_squared_distance = squared_dist(point, light_pt)
         done = False
         for obj in scene.objects:
-            for triangle in obj['geometry'].triangles:
+            if type(obj['geometry']) is BezierSurface:
                 try:
-                    pt_3d = intersect(ray, triangle)
+                    surface = obj['geometry']
+                    pt_3d, _ = surface.intersect(ray)
                     inter_squared_distance = squared_dist(pt_3d, point)
                     if inter_squared_distance < ZERO:  # intersection point is the point itself
                         continue
@@ -50,7 +52,19 @@ def compute_shadow_rays(scene, point, normal, n_light_samples=3):
                         done = True
                         break
                 except NoIntersection:
-                    pass
+                    continue
+            else:
+                for triangle in obj['geometry'].triangles:
+                    try:
+                        pt_3d = intersect(ray, triangle)
+                        inter_squared_distance = squared_dist(pt_3d, point)
+                        if inter_squared_distance < ZERO:  # intersection point is the point itself
+                            continue
+                        if pt_3d is not None and inter_squared_distance < light_squared_distance:
+                            done = True
+                            break
+                    except NoIntersection:
+                        pass
             if done:
                 break
         if done:
@@ -87,26 +101,38 @@ def intersect_objects(ray, objects, light_obj):
     # (otherwise we'd skip it and mix up different pixel's paths)
     if ray is None:
         return None
+    pt_screen = ray[0] + ray[1]
     # adds light to object list
     myObjects = objects + [{'geometry': light_obj}]
     # returns nearest intersecting object
     intersections = []
     for i, obj in enumerate(myObjects):
-        for triangle, normal in zip(obj['geometry'].triangles,
-                                    obj['geometry'].normals):
+        if type(obj['geometry']) is BezierSurface:
+            surface = obj['geometry']
             try:
-                pt_3d = intersect(ray, triangle)
-                ray_point, ray_vector = ray
-                if pt_3d is not None and squared_dist(pt_3d, ray_point) > ZERO:
-                    pt_screen = ray[0] + ray[1]
-                    intersections.append(
-                        [squared_dist(pt_3d, ray[0]),
-                         pt_3d,
-                         pt_screen,
-                         normal,
-                         i])
+                pt_3d, normal = surface.intersect(ray)
+                intersections.append([squared_dist(pt_3d, ray[0]),
+                                      pt_3d,
+                                      pt_screen,
+                                      normal,
+                                      i])
             except NoIntersection:
                 pass
+        else:
+            for triangle, normal in zip(obj['geometry'].triangles,
+                                        obj['geometry'].normals):
+                try:
+                    pt_3d = intersect(ray, triangle)
+                    ray_point, ray_vector = ray
+                    if pt_3d is not None and squared_dist(pt_3d, ray_point) > ZERO:
+                        intersections.append(
+                            [squared_dist(pt_3d, ray[0]),
+                             pt_3d,
+                             pt_screen,
+                             normal,
+                             i])
+                except NoIntersection:
+                    pass
 
     if intersections == []:
         return None
@@ -169,7 +195,7 @@ def main():
         *scene.ortho, scene.width, scene.height)
     print(f'Number of objects: {len(scene.objects)}')
     print(
-        f'Number of triangles: {sum([len(o["geometry"].triangles) for o in scene.objects])}')
+        f'Number of triangles: {sum([len(o["geometry"].triangles) for o in scene.objects if type(o["geometry"]) is not BezierSurface])}')
     results = []
     how_many_rays = args.n_rays
     how_many_bounces = args.n_bounces
@@ -195,7 +221,6 @@ def main():
             results = []
             print('intersecting...')
             with Pool(cpu_count()) as pool:
-                print('creating threads...')
                 for ray in tqdm(rays):
                     results.append(pool.apply_async(
                         intersect_objects, (ray, scene.objects, scene.light_obj)))
@@ -208,7 +233,7 @@ def main():
             with Pool(cpu_count()) as pool:
                 new_colors = []
                 print('creating threads...')
-                for i_ray, result in tqdm(list(enumerate(results))):
+                for i_ray, result in enumerate(results):
                     if result is not None:
                         point, normal, obj, isItLight = result
                         if isItLight:

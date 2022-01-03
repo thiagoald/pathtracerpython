@@ -49,11 +49,14 @@ def plot_scene(scene, rays, data,
 def plot_objects(widget, objects, normals=False):
     for i, object in enumerate(objects):
         color = [object[c] for c in ('red', 'green', 'blue')] + [1]
-        triangles = np.array(object['geometry'].triangles)
-        plot_triangles_3d(widget, triangles, color)
-        if normals:
-            plot_normals(widget, triangles,
-                         object['geometry'].normals, color=color)
+        if type(object['geometry']) is BezierSurface:
+            plot_surface(widget, object['geometry'], color=color)
+        else:
+            triangles = np.array(object['geometry'].triangles)
+            plot_triangles_3d(widget, triangles, color)
+            if normals:
+                plot_normals(widget, triangles,
+                             object['geometry'].normals, color=color)
 
 
 def plot_normals(widget, triangles, normals, color=GREEN_OPAQUE, size_endpoint=3):
@@ -132,7 +135,7 @@ def plot_curve(widget, bezier_curve: BezierCurve, n_steps=100, color=BLUE_OPAQUE
         pts), color=color, glOptions='translucent'))
 
 
-def plot_intersections(widget, ray, intersections, color=RED_OPAQUE, size=3):
+def plot_intersections_surface(widget, ray, intersections, color=RED_OPAQUE, size=3):
     pt, v = ray
     pt = np.array(pt)
     v = np.array(v)
@@ -155,3 +158,26 @@ def plot_pts_normals(widget, points, normals, color=WHITE_OPAQUE, color_normal=R
         widget.addItem(gl.GLLinePlotItem(
             pos=np.array([pt, pt+n]), color=color_normal,
             glOptions='translucent'))
+
+
+def plot_scene_raster(widget, scene):
+    plot_camera(widget, scene.eye)
+    objects = scene.objects
+    # Shaders: [None, 'balloon', 'viewNormalColor', 'normalColor', 'shaded', 'edgeHilight', 'heightColor', 'pointSprite']
+    for object in objects:
+        color = [object[c] for c in ('red', 'green', 'blue')] + [1]
+        if type(object['geometry']) is BezierSurface:
+            print('plotting bezier surface')
+            plot_surface(widget, object['geometry'], color=color)
+        else:
+            mesh_data = gl.MeshData(
+                vertexes=np.array(object['geometry'].vertexes),
+                faces=np.array(object['geometry'].faces),
+                faceColors=np.array([color]*len(object['geometry'].faces)))
+            widget.addItem(
+                gl.GLMeshItem(meshdata=mesh_data,
+                              smooth=False,
+                              shader='shaded',
+                              glOptions='opaque',
+                              drawEdges=True,
+                              edgeColor=(0, 0, 0, 1)))
