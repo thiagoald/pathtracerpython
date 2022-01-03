@@ -256,7 +256,7 @@ def make_image(x1, y1, x2, y2, width, height, intersections):
         counter+=1
     mat = mat - np.min(mat)
     mat = mat / np.max(mat)
-    mat = mat/ (mat+np.array((.5, .5, .5)))
+    mat = mat/ (mat+np.array((.4, .4, .4)))
     mat *= 255
     return Image.fromarray(mat.astype('uint8'))
 

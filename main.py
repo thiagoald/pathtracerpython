@@ -22,7 +22,7 @@ import math
 
 TAU = 6.28
 ZERO = 1E-5
-MAX_RAYS_AT_ONCE = 1000
+MAX_RAYS_AT_ONCE = 50
 
 def compute_shadow_rays(scene, points, normals,objs, n_light_samples=1):
     '''
@@ -127,6 +127,19 @@ def unpack_ray_data(data):
             results.append([pt_3d, normal, obj_index, ray_index])
     return results
     
+def refract(refraction_ratio, normal, incoming_ray):
+    incoming_ray=-incoming_ray
+    if (np.dot(incoming_ray, normal)<0):
+        normal = -normal
+    incoming_cosine = np.dot(incoming_ray, normal)
+    if incoming_cosine*incoming_cosine< 1-(refraction_ratio*refraction_ratio):
+        return np.array((0.,0.,0.)), True
+    outgoing_cosine = math.sqrt(1-(1/refraction_ratio*refraction_ratio)*(1-incoming_cosine*incoming_cosine))
+    ray_vector = -(1/refraction_ratio)*incoming_ray - (outgoing_cosine - 1/refraction_ratio*incoming_cosine)*normal
+    ray_vector = ray_vector/np.linalg.norm(ray_vector)
+    return ray_vector, False
+    
+    
 def organize_ray_data(rays):
     ray_data = []
     for ray in rays:
@@ -136,24 +149,23 @@ def organize_ray_data(rays):
 
 def intersect_objects(rays, objects, light_obj):
     '''Return ray index, intersection point, triangle normal, object and whether object is the light source'''
+    '''
     if "d_obj_data" not in intersect_objects.__dict__:
         intersect_objects.myObjects = objects + [{'geometry': light_obj}]
         obj_data = organize_objs_data(intersect_objects.myObjects)
         intersect_objects.d_obj_data = cuda.to_device(obj_data)
-        
+    ''' 
+    
+    myObjects = objects + [{'geometry': light_obj}]
+    obj_data = organize_objs_data(myObjects)
+    d_obj_data = cuda.to_device(obj_data)
+    
     ray_data = organize_ray_data(rays)
     d_ray_data = cuda.to_device(ray_data)
     d_out_data = cuda.device_array((len(rays),9), dtype='float64') #7 for the 3 positional point values + 3 normal vector values 1 object index + 1 found flag + 1 ray index
-    '''
-    print (intersect_objects.d_obj_data.size)
-    print (d_ray_data.size)
-    print (d_out_data.size)
-    print (intersect_objects.d_obj_data.size + d_ray_data.size + d_out_data.size)
-    exit()
-    '''
     threadsperblock = 32
     blockspergrid = (d_ray_data.size +threadsperblock-1)
-    intersections = intersect[blockspergrid,threadsperblock](intersect_objects.d_obj_data, d_ray_data, d_out_data)
+    intersections = intersect[blockspergrid,threadsperblock](d_obj_data, d_ray_data, d_out_data)
     out_data = d_out_data.copy_to_host()
     
     intersections = unpack_ray_data(out_data)
@@ -161,7 +173,7 @@ def intersect_objects(rays, objects, light_obj):
     if len(intersections)==0:
         return None
     for one_inter in intersections:
-        obj = intersect_objects.myObjects[one_inter[2]]
+        obj = myObjects[one_inter[2]]
         if obj['geometry'] == light_obj:
             isItLight = True
         else:
@@ -264,12 +276,14 @@ def main():
                     results+=temp_result
 
             # now we create new rays
+            print ('computing new rays...')
             old_rays={}
             for ray in rays:
                 _,_, index = ray
                 old_rays[index] = ray
             rays = []
             isItDiffuse=[True] * (scene.width*scene.height)
+            isItSpecular = [False] * (scene.width*scene.height) 
             for result in tqdm(results):
                 if result is not None:
                     
@@ -296,10 +310,11 @@ def main():
                         if specular_dot<0:
                             specular_dot=0
                         
-                        ray_type_randomness = uniform(0, obj['kd']+obj['ks'])
+                        ray_type_randomness = uniform(0, obj['kd']+obj['ks']+obj['kt'])
                         
                         if ray_type_randomness <= obj['kd']:  # Case 1: diffuse
                             isItDiffuse[i_ray]=True
+                            isItSpecular[i_ray]=False
                             phi = np.arccos(math.sqrt(uniform(0, 1)))
                             phi=phi/2
                             theta = TAU*uniform(0, 1)
@@ -312,10 +327,47 @@ def main():
                             rays.append((point, ray_vector, i_ray))
                             accumulated_k[i_ray] *= obj['kd'] * np.dot(ray_vector, normal)
                             
-                        else: # Case 2: specular
+                        elif ray_type_randomness<=obj['kd']+obj['ks']: # Case 2: specular
                             isItDiffuse[i_ray]=False
+                            isItSpecular[i_ray]=True
                             accumulated_k[i_ray] *= obj['ks'] * (specular_dot)**obj['n']
-                            
+                        else: # Case 3: transmitted
+                            isItDiffuse[i_ray]=False
+                            isItSpecular[i_ray]=False
+                            _, old_ray_vector, _ = old_rays[i_ray]
+                            ray_vector, _ = refract(1.31, normal, old_ray_vector)
+                            ray = (point, ray_vector, i_ray,)   
+                            total_reflection = True
+                            total_reflection_counter = 3
+                            while total_reflection:
+                                total_reflection_counter-=1
+                                if total_reflection_counter==0:
+                                    break
+                                refraction_result = intersect_objects([ray], [obj], scene.light_obj)
+                                if refraction_result is not None:
+                                    _, new_point, new_normal, _, _ = refraction_result[0]
+                                    new_ray_vector, total_reflection = refract(1./1.31, new_normal, ray_vector)
+                                    if not total_reflection:
+                                        rays.append ((new_point, new_ray_vector, i_ray))
+                                        accumulated_k[i_ray] *= obj['kt']
+                                        break
+                                    else: # reflect the ray inside the object
+                                        new_ray_vector=-new_ray_vector
+                                        if np.dot(new_ray_vector, new_normal)<0:
+                                            adjusted_new_normal = -new_normal
+                                        else:
+                                            adjusted_new_normal = new_normal
+                                        total_reflection_ray_vector=2*np.dot(new_ray_vector, adjusted_new_normal)*adjusted_new_normal - new_ray_vector
+                                        if np.dot(new_ray_vector, adjusted_new_normal) != np.dot(total_reflection_ray_vector, adjusted_new_normal):
+                                            print ("BUG! total reflection outgoing ray is miscalculated")
+                                            exit()
+                                        ray = (new_point, total_reflection_ray_vector, i_ray)
+                                else:
+                                    isItDiffuse[i_ray]=True #use the object's normal color
+                                    accumulated_k[i_ray]*=1.4 #shine?
+                            if total_reflection_counter==0:  #reflected internally too many times
+                                isItDiffuse[i_ray]=True #use the object's normal color
+                        
             # compute colors
             new_colors = []
             i_rays = []
@@ -323,6 +375,8 @@ def main():
             normals = [] 
             objs = []
             AreTheyLight = []
+            obj_dict={}
+            light_dict={}
             for result in results:
                 if result is not None:
                     x, y, z, w, l = result
@@ -331,14 +385,18 @@ def main():
                     normals.append(z)
                     objs.append(w)
                     AreTheyLight.append(l)
+                    obj_dict[x]=w
+                    light_dict[x]=l
             new_color_data = compute_color(scene, objs, points, normals, AreTheyLight, i_rays)
             for new_color, i_ray, point in new_color_data:
                 old_color, _ = colored_intersections[i_ray]
                 if isItDiffuse[i_ray]:
                     colored_intersections[i_ray] = (old_color+new_color*accumulated_k[i_ray], [(point, new_color,)])
-                else:
+                elif isItSpecular[i_ray]:
                     new_color = np.array(scene.light_color)
                     colored_intersections[i_ray] = (old_color+new_color*accumulated_k[i_ray], [(point, new_color,)])
+                else: # then it's transmitted
+                    colored_intersections[i_ray] = (old_color, [(point, new_color,)])
                     
                     
         for i, intersec in enumerate(colored_intersections):
