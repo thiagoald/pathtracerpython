@@ -150,18 +150,20 @@ def organize_ray_data(rays):
 def intersect_objects(rays, objects, light_obj):
     '''Return ray index, intersection point, triangle normal, object and whether object is the light source'''
     
-    gpu_objects = [o for o in objects if type(o['geometry']) is not BezierSurface]
-    bezier_objects = [o for o in objects if type(o['geometry']) is BezierSurface]
-    gpu_objects = gpu_objects + [{'geometry': light_obj}]
-    obj_data = organize_objs_data(gpu_objects)
-    d_obj_data = cuda.to_device(obj_data)
+    if "d_obj_data" not in intersect_objects.__dict__:
+        intersect_objects.myObjects = objects + [{'geometry': light_obj}]
+        obj_data = organize_objs_data(intersect_objects.myObjects)
+        intersect_objects.d_obj_data = cuda.to_device(obj_data)
+    
+    gpu_objects = intersect_objects.myObjects 
+    bezier_objects=[]
     
     ray_data = organize_ray_data(rays)
     d_ray_data = cuda.to_device(ray_data)
     d_out_data = cuda.device_array((len(rays),9), dtype='float64') #9 for the 3 positional point values + 3 normal vector values 1 object index + 1 found flag + 1 ray index
     threadsperblock = 32
     blockspergrid = (d_ray_data.size +threadsperblock-1)
-    intersect[blockspergrid,threadsperblock](d_obj_data, d_ray_data, d_out_data)
+    intersect[blockspergrid,threadsperblock](intersect_objects.d_obj_data, d_ray_data, d_out_data)
     out_data = d_out_data.copy_to_host()
     
     gpu_closest_intersections = unpack_ray_data(out_data)
