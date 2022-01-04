@@ -23,12 +23,13 @@ from bezier import BezierSurface
 
 TAU = 6.28
 ZERO = 1E-5
-MAX_RAYS_AT_ONCE = 50
+MAX_RAYS_AT_ONCE = 1000
 
 def compute_shadow_rays(scene, points, normals,objs, n_light_samples=1):
     '''
     Return the color of a point from direct illumination by the light source
     '''
+    
     # Vectors starting at the object and pointing to the sampled light point
     shadow_rays = []
     light_color = scene.light_color
@@ -40,7 +41,6 @@ def compute_shadow_rays(scene, points, normals,objs, n_light_samples=1):
             light_tri = scene.light_obj.triangles[i]
             # Random point in this triangle
             light_pt = sample_random_pt(light_tri)
-            light_pt = (np.array(light_tri[0]) + np.array(light_tri[1]) + np.array(light_tri[2]))/3
             # intersect
             ray_vector = light_pt - point
             ray_vector = ray_vector/np.linalg.norm(ray_vector)
@@ -149,19 +149,20 @@ def organize_ray_data(rays):
 
 def intersect_objects(rays, objects, light_obj):
     '''Return ray index, intersection point, triangle normal, object and whether object is the light source'''
+    if "d_obj_data" not in intersect_objects.__dict__:
+        intersect_objects.myObjects = objects + [{'geometry': light_obj}]
+        obj_data = organize_objs_data(intersect_objects.myObjects)
+        intersect_objects.d_obj_data = cuda.to_device(obj_data)
     
-    gpu_objects = [o for o in objects if type(o['geometry']) is not BezierSurface]
-    bezier_objects = [o for o in objects if type(o['geometry']) is BezierSurface]
-    gpu_objects = gpu_objects + [{'geometry': light_obj}]
-    obj_data = organize_objs_data(gpu_objects)
-    d_obj_data = cuda.to_device(obj_data)
+    gpu_objects = intersect_objects.myObjects 
+    bezier_objects=[]
     
     ray_data = organize_ray_data(rays)
     d_ray_data = cuda.to_device(ray_data)
     d_out_data = cuda.device_array((len(rays),9), dtype='float64') #9 for the 3 positional point values + 3 normal vector values 1 object index + 1 found flag + 1 ray index
     threadsperblock = 32
     blockspergrid = (d_ray_data.size +threadsperblock-1)
-    intersect[blockspergrid,threadsperblock](d_obj_data, d_ray_data, d_out_data)
+    intersect[blockspergrid,threadsperblock](intersect_objects.d_obj_data, d_ray_data, d_out_data)
     out_data = d_out_data.copy_to_host()
     
     gpu_closest_intersections = unpack_ray_data(out_data)
@@ -359,7 +360,6 @@ def main():
                             i = pick_random_triangle(areas)
                             light_tri = scene.light_obj.triangles[i]
                             light_pt = sample_random_pt(light_tri)
-                            light_pt = (np.array(light_tri[0]) + np.array(light_tri[1]) + np.array(light_tri[2]))/3
                             light_vector = light_pt - point
                             light_vector = light_vector/np.linalg.norm(light_vector)
                             
