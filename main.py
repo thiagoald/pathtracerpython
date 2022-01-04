@@ -41,8 +41,6 @@ def compute_shadow_rays(scene, points, normals, objs, n_light_samples=1):
             light_tri = scene.light_obj.triangles[i]
             # Random point in this triangle
             light_pt = sample_random_pt(light_tri)
-            light_pt = (
-                np.array(light_tri[0]) + np.array(light_tri[1]) + np.array(light_tri[2]))/3
             # intersect
             ray_vector = light_pt - point
             ray_vector = ray_vector/np.linalg.norm(ray_vector)
