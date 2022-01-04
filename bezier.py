@@ -123,7 +123,8 @@ class BezierSurface:
         s1, s2 = self.split_u(u)
         s1_1, s1_2 = s1.transposed().split_u(v)
         s2_1, s2_2 = s2.transposed().split_u(v)
-        return s1_1.transposed(), s1_2, s2_1, s2_2.transposed()
+        self.children = (s1_1.transposed(), s1_2, s2_1, s2_2.transposed())
+        return self.children
 
     def translated(self, vector):
         n_i, n_j, _ = self.ctrlpts.shape
@@ -185,8 +186,8 @@ class BezierSurface:
                         pass
 
         if len(intersections) > 0:
-            P, t = min(intersections, key=lambda inter: inter[1])
-            return P
+            P, n, t = min(intersections, key=lambda inter: inter[2])
+            return P, n
         else:
             raise NoIntersection
 
