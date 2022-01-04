@@ -52,7 +52,7 @@ def compute_shadow_rays(scene, points, normals, objs, n_light_samples=1):
     results = []
     for gpu_limiter in tqdm(range(gpu_limit)):
         temp_result = intersect_objects(
-            shadow_rays[gpu_limiter*MAX_RAYS_AT_ONCE:\
+            shadow_rays[gpu_limiter*MAX_RAYS_AT_ONCE:
                         (gpu_limiter+1)*MAX_RAYS_AT_ONCE],
             scene.objects,
             scene.light_obj)
@@ -162,10 +162,10 @@ def organize_ray_data(rays):
 def intersect_objects(rays, objects, light_obj):
     '''Return ray index, intersection point, triangle normal, object and whether object is the light source'''
 
-    gpu_objects = [o for o in objects if type(
-        o['geometry']) is not BezierSurface]
-    bezier_objects = [o for o in objects if type(
-        o['geometry']) is BezierSurface]
+    gpu_objects = [o for o in objects
+                   if type(o['geometry']) is not BezierSurface]
+    bezier_objects = [o for o in objects
+                      if type(o['geometry']) is BezierSurface]
     gpu_objects = gpu_objects + [{'geometry': light_obj}]
     obj_data = organize_objs_data(gpu_objects)
     d_obj_data = cuda.to_device(obj_data)

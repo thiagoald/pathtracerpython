@@ -2,7 +2,7 @@
 
 from multiprocessing import Value
 import numpy as np
-from utils import NoIntersection, cpu_intersect, bbox_to_triangles
+from utils import NoIntersection, cpu_intersect, bbox_to_triangles, squared_dist
 
 
 def lerp(pt1, pt2, t):
@@ -152,7 +152,7 @@ class BezierSurface:
         if len(intersections) == 0:
             raise NoIntersection
         else:
-            return intersections
+            return min(intersections, key=lambda inter: inter[1])
 
     def intersect(self, ray, max_delta=0.1, widget=None):
         from plot import plot_bbox, plot_surface
@@ -162,14 +162,15 @@ class BezierSurface:
             raise NoIntersection
 
         stack = [self]
-        found = False
+        intersections = []
         while stack != []:
             parent = stack.pop()
             try:
-                parent.intersect_bbox(ray)
+                _, t = parent.intersect_bbox(ray)
                 if parent.within_delta(max_delta):
-                    found = True
-                    break
+                    intersections.append((parent.eval(0.5, 0.5),
+                                          parent.eval_normal(0.5, 0.5),
+                                          t))
             except NoIntersection:
                 pass
             else:
@@ -183,8 +184,9 @@ class BezierSurface:
                     except NoIntersection:
                         pass
 
-        if found:
-            return (parent.eval(0.5, 0.5), parent.eval_normal(0.5, 0.5))
+        if len(intersections) > 0:
+            P, t = min(intersections, key=lambda inter: inter[1])
+            return P
         else:
             raise NoIntersection
 

@@ -269,10 +269,11 @@ def cpu_intersect(ray, triangle):
              )/np.dot(v_plane, vr)  # calculate intersection parameter
         P = np.array(pr) + vr*t  # calculate intersection point
     else:
+        t = None
         P = None  # in collinear case, there's no intersection point
 
     if cpu_in_triangle(P, triangle):
-        return P
+        return P, t
 
     else:
         raise NoIntersection
