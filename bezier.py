@@ -43,6 +43,7 @@ class BezierCurve:
 class BezierSurface:
     def __init__(self, ctrlpts):
         self.ctrlpts = np.array(ctrlpts)
+        self.children = None
         self.delta_u = None
         self.delta_v = None
 
@@ -117,6 +118,8 @@ class BezierSurface:
         return BezierSurface(ctrlpts_mat_1), BezierSurface(ctrlpts_mat_2)
 
     def split_uv(self, u=0.5, v=0.5):
+        if self.children is not None:
+            return self.children
         s1, s2 = self.split_u(u)
         s1_1, s1_2 = s1.transposed().split_u(v)
         s2_1, s2_2 = s2.transposed().split_u(v)
