@@ -2,10 +2,11 @@
 
 from bezier import BezierCurve, BezierSurface
 import numpy as np
-from plot import (init, plot_pts_normals, show, plot_curve, plot_surface,
+from plot import (init, plot_pts_normals, plot_surface_tree, show, plot_curve, plot_surface,
                   RED_OPAQUE, BLUE_OPAQUE, WHITE_OPAQUE, GREEN_OPAQUE)
 from plot import plot_intersections_surface as plot_intersections
 from utils import NoIntersection
+from tqdm import tqdm
 
 
 def curve(widget):
@@ -27,7 +28,7 @@ def normals(widget, surface, color):
             normals.append(surface.eval_normal(u, v))
     plot_surface(widget, surface, color=color)
     plot_pts_normals(widget, pts, normals,
-                   color_normal=color)
+                     color_normal=color)
 
 
 def surface_subdivision(widget):
@@ -48,7 +49,7 @@ def surface_intersection(widget):
     ctrlpts = np.random.rand(2, 2, 3)
     surface = BezierSurface(ctrlpts).scaled(30)
     base_ray = [np.array((0, 0, 0)), np.array((1, 1, 1))]
-    plot_surface(widget, surface, 30)
+    plot_surface(widget, surface, 20)
     n_random_rays = 200
     normals = []
     pts = []
@@ -56,18 +57,25 @@ def surface_intersection(widget):
         try:
             ray = [base_ray[0], base_ray[1] + np.random.rand(3)*5]
             ray[1] = ray[1]/np.linalg.norm(ray[1])
+            ray.append(0)
             pt, normal = surface.intersect(ray)
             pts.append(pt)
             normals.append(normal)
             plot_intersections(widget, ray, [pt])
+        except KeyboardInterrupt:
+            print('Stopped by user...')
+            exit()
         except NoIntersection:
             pass
+
+    # plot_surface_tree(widget, surface)
     plot_pts_normals(widget, pts, normals)
 
 
 def main():
     w = init()
     surface_intersection(w)
+    # surface_subdivision(w)
     show()
 
 

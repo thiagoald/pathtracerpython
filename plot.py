@@ -135,7 +135,7 @@ def plot_curve(widget, bezier_curve: BezierCurve, n_steps=100, color=BLUE_OPAQUE
 
 
 def plot_intersections_surface(widget, ray, intersections, color=RED_OPAQUE, size=3):
-    pt, v = ray
+    pt, v, _ = ray
     pt = np.array(pt)
     v = np.array(v)
     colors = np.array([WHITE_OPAQUE, GREEN_OPAQUE] +
@@ -180,3 +180,12 @@ def plot_scene_raster(widget, scene):
                               glOptions='opaque',
                               drawEdges=True,
                               edgeColor=(0, 0, 0, 1)))
+
+
+def plot_surface_tree(widget, surface, color=WHITE_OPAQUE):
+    stack = [surface]
+    while len(stack) > 0:
+        parent = stack.pop()
+        plot_bbox(widget, parent, color=color)
+        if parent.children is not None:
+            stack.extend(parent.children)
