@@ -360,6 +360,7 @@ def main():
                             i = pick_random_triangle(areas)
                             light_tri = scene.light_obj.triangles[i]
                             light_pt = sample_random_pt(light_tri)
+                            light_pt = (np.array(light_tri[0]) + np.array(light_tri[1]) + np.array(light_tri[2]))/3
                             light_vector = light_pt - point
                             light_vector = light_vector/np.linalg.norm(light_vector)
                             
